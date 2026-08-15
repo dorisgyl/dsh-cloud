@@ -65,6 +65,22 @@ This does not change the design — §5.4 already has `host/webserver` as
 "discard, write our own" — but it does size that work. What has to be built is a
 message vocabulary, not a socket that dumps state.
 
+**Fixed 2026-08-15.** `SessionAgentDO` now follows the contract: a subscription
+is acknowledged with `session/subscribed { sessionId, lastSeq }` and nothing
+else, live appends push as `session/event { sessionId, event }`, and the backlog
+is pulled with a cursor through `/history?from=&limit=`. Nothing is pushed on
+connect. The live push hooks the Cordis event `session/event`, which turned out
+to exist after all (see the correction in M1 ①).
+
+Measured on a 12,565-event session: connect now costs one small acknowledgement
+instead of ~6 MB, and a client that was away pulls only what it missed — 12
+events rather than the whole log.
+
+The full mux framing (`client-request` / `server-response` / `server-request` /
+`client-response`) and the eighteen-message downlink union remain M3 work; what
+exists now is the subset this object actually produces, shaped so the real
+client can read it rather than shaped privately.
+
 ## 3. Does the UI render tool panels from the registry, or hardcode them?
 
 **From the registry — and the minimal tier therefore needs no UI change at all.**

@@ -116,6 +116,11 @@ export class SessionAgentDO extends DurableObject {
     }
     this.adapter = this.workersAi ?? this.stub
 
+    // Live push. `session/event` is a real Cordis event carrying (session,
+    // event) on every append — the log-entry names like `turn/start` are not
+    // Cordis events, which is what an earlier note here got wrong.
+    ctx.on('session/event', (_session, event) => this.pushEvent(event))
+
     this.tree = { ctx, report, services: servicesOn(ctx), assembleMs: Date.now() - t0 }
     return this.tree
   }
@@ -131,10 +136,23 @@ export class SessionAgentDO extends DurableObject {
       // Hibernation-aware accept: the object may be evicted between messages
       // without dropping the socket.
       this.state.acceptWebSocket(server)
-      // Replay on connect. The log is the source of truth, so a client that was
-      // away — or is brand new — catches up the same way.
-      server.send(JSON.stringify({ type: 'replay', events: this.readLog() }))
+      // Upstream's contract (dsh-client-connection): a subscription is
+      // acknowledged with the last sequence number and nothing else. History is
+      // PULLED by the client afterwards, not pushed on connect — an earlier
+      // version of this object dumped the whole log here, which was both
+      // unbounded (~6 MB at 12,565 events) and a message no real client speaks.
+      server.send(JSON.stringify({
+        type: 'session/subscribed',
+        sessionId: this.sessionId,
+        lastSeq: this.maxSeq() ?? -1,
+      }))
       return new Response(null, { status: 101, webSocket: client })
+    }
+
+    if (url.pathname === '/history') {
+      const from = Number(url.searchParams.get('from') ?? 0)
+      const limit = Math.min(Number(url.searchParams.get('limit') ?? 200), 1000)
+      return Response.json(this.history(from, limit))
     }
 
     if (url.pathname === '/state') {
@@ -465,6 +483,32 @@ export class SessionAgentDO extends DurableObject {
         .toArray()
     } catch {
       return []
+    }
+  }
+
+  /** One appended event, pushed to every attached socket in upstream's shape. */
+  pushEvent(event) {
+    this.broadcast({ type: 'session/event', sessionId: this.sessionId, event })
+  }
+
+  /**
+   * The backlog, paged. Bounded by construction: a client asks for what it is
+   * missing rather than being handed everything on connect.
+   */
+  history(from, limit) {
+    try {
+      const events = this.sql
+        .exec(
+          'SELECT event FROM session_event WHERE id = ? AND seq >= ? ORDER BY seq ASC LIMIT ?',
+          this.sessionId, from, limit,
+        )
+        .toArray()
+        .map((row) => JSON.parse(row.event))
+      const lastSeq = this.maxSeq() ?? -1
+      const nextFrom = events.length ? events[events.length - 1].seq + 1 : from
+      return { sessionId: this.sessionId, from, lastSeq, events, nextFrom, done: nextFrom > lastSeq }
+    } catch (error) {
+      return { sessionId: this.sessionId, from, lastSeq: -1, events: [], nextFrom: from, done: true, error: String(error?.message ?? error) }
     }
   }
 

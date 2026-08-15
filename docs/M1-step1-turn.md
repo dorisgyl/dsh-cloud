@@ -40,15 +40,19 @@ the loop.
 
 ## Findings
 
-### 1. Session events are log entries, not Cordis events
+### 1. Session events are log entries, not Cordis events — half right
 
-This is the most consequential discovery for what comes next. Listening on
-`ctx.on('turn/start')` **never fires** — `turn/start`, `assistant/chunk` and the
-rest are records appended to `session.events`, a separate append-only log.
+Listening on `ctx.on('turn/start')` **never fires**. `turn/start`,
+`assistant/chunk` and the rest are records appended to `session.events`, a
+separate append-only log, and their names are not Cordis event names.
 
-**`cf-session-persistence-do` must therefore hook the session's append path, not
-the Cordis event bus.** Building it against `ctx.on(...)` would produce a
-persistence layer that silently stores nothing.
+> **Corrected 2026-08-15.** There *is* a Cordis event for appends, under a
+> different name: `'session/event'(session, event)` fires on every append. So
+> the conclusion "hook the append path, not the event bus" was wrong — the bus
+> works, via `ctx.on('session/event', ...)`, which is how live WebSocket push is
+> now implemented. What holds is the narrower claim: **the log-entry vocabulary
+> is not the Cordis event vocabulary**, so subscribing by log-entry name gets
+> you silence.
 
 ### 2. A failing turn still returns HTTP 200
 
