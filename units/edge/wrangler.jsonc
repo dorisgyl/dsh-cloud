@@ -1,0 +1,29 @@
+{
+  // U1 dsh-edge — the only public-facing unit.
+  "name": "dsh-edge",
+  "main": "build/edge.bundle.js",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Static assets and the API share one Worker on one origin, which removes
+  // CORS and cross-origin WebSocket configuration entirely (design 8.3).
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+
+  "durable_objects": {
+    "bindings": [
+      { "name": "SESSION", "class_name": "SessionAgentDO", "script_name": "dsh-session-do" }
+    ]
+  },
+
+  "vars": {
+    "TENANT": "default"
+    // Deployed instances set ACCESS_TEAM_DOMAIN and ACCESS_AUD instead.
+    // DEV_IDENTITY is read only when Access is unconfigured, so a deployed
+    // instance cannot fall back into it by forgetting a flag.
+  }
+
+  // `workers_dev` is deliberately absent. *.workers.dev is blocked outright on
+  // some networks, and the failure is invisible: the browser's fetch dies
+  // before the WebSocket upgrade, so nothing reaches the Worker's logs and it
+  // looks like the service is down. Deploy on your own hostname.
+}
