@@ -104,6 +104,13 @@ export class SessionAgentDO extends DurableObject {
       return Response.json(await this.snapshot())
     }
 
+    if (url.pathname === '/bench') {
+      const turns = Number(url.searchParams.get('turns') ?? 50)
+      const every = Number(url.searchParams.get('every') ?? 10)
+      const live = url.searchParams.get('live') === '1'
+      return Response.json(live ? await this.benchLive(turns, every) : await this.bench(turns, every))
+    }
+
     // Enqueue over HTTP too, so the behaviour is testable without a socket.
     const prompt = url.searchParams.get('q')
     if (prompt) {
@@ -168,15 +175,19 @@ export class SessionAgentDO extends DurableObject {
     const seqBefore = this.maxSeq()
     const callsBefore = this.adapter.calls
     const t0 = Date.now()
+    let resumeMs = 0
 
     // A Durable Object woken from hibernation must resume: create() on an id
     // that already has a persisted log is rejected as an id collision, and the
     // rejection surfaces only inside the session log.
     const persisted = seqBefore !== null
+    const tOpen = Date.now()
     const handle = persisted
       ? await ctx.agents.resume({ resumeSessionId: this.sessionId, agentOptions: AGENT_OPTIONS })
       : await ctx.agents.create({ sessionId: this.sessionId, agentOptions: AGENT_OPTIONS })
+    resumeMs = Date.now() - tOpen
     const agent = handle.agent
+    const tRun = Date.now()
 
     try {
       agent.followup(createUserMessage({
@@ -196,13 +207,117 @@ export class SessionAgentDO extends DurableObject {
         reply: last?.data?.message?.content?.filter((b) => b?.type === 'text').map((b) => b.text).join('') ?? null,
         measurements: {
           assembleMs,
+          // Split deliberately: `resume` reloads the whole log, so if anything
+          // degrades with session length it shows up here rather than in the
+          // turn itself.
+          resumeMs,
+          runMs: Date.now() - tRun,
           turnWallMs: Date.now() - t0,
           modelCalls: this.adapter.calls - callsBefore,
           eventsAppended: (this.maxSeq() ?? -1) - (seqBefore ?? -1),
+          projection: this.projectionSize(agent),
         },
       }
     } finally {
       await handle.dispose()
+    }
+  }
+
+  // ------------------------------------------------------------------- bench
+
+  /**
+   * Drive many turns and sample how the session grows.
+   *
+   * This calls runTurn directly rather than going through the queue and alarm:
+   * the alarm path is what production uses, but it serialises one turn per
+   * invocation, and the question here is how cost scales with log length, not
+   * how the driver behaves.
+   *
+   * No API exposes a Worker's heap size — not locally and not deployed — so
+   * this measures the things that *are* observable and that heap tracks:
+   * durable bytes, projected message bytes, and where time goes.
+   */
+  async bench(turns, sampleEvery) {
+    await this.ensureTree()
+    const samples = []
+    const t0 = Date.now()
+    for (let i = 0; i < turns; i++) {
+      const result = await this.runTurn(`bench turn ${i}`)
+      if (!result.ok) {
+        samples.push({ turn: i, failed: true, reason: result.reason })
+        break
+      }
+      if (i % sampleEvery === 0 || i === turns - 1) {
+        samples.push({
+          turn: i,
+          ...this.durableSize(),
+          resumeMs: result.measurements.resumeMs,
+          runMs: result.measurements.runMs,
+          projection: result.measurements.projection,
+        })
+      }
+    }
+    return { turns, elapsedMs: Date.now() - t0, samples }
+  }
+
+  /**
+   * The same benchmark, but holding ONE agent across every turn instead of
+   * resuming per turn. Resume reloads the whole log, so this separates
+   * "what a turn costs" from "what reloading the session costs".
+   */
+  async benchLive(turns, sampleEvery) {
+    const { ctx } = await this.ensureTree()
+    const samples = []
+    const t0 = Date.now()
+    const persisted = this.maxSeq() !== null
+    const handle = persisted
+      ? await ctx.agents.resume({ resumeSessionId: this.sessionId, agentOptions: AGENT_OPTIONS })
+      : await ctx.agents.create({ sessionId: this.sessionId, agentOptions: AGENT_OPTIONS })
+    const agent = handle.agent
+    try {
+      for (let i = 0; i < turns; i++) {
+        const tRun = Date.now()
+        agent.followup(createUserMessage({
+          content: [{ type: 'text', text: `live bench turn ${i}` }],
+          source: { kind: 'user' },
+        }))
+        await agent.whenIdle()
+        const runMs = Date.now() - tRun
+        if (i % sampleEvery === 0 || i === turns - 1) {
+          samples.push({ turn: i, ...this.durableSize(), resumeMs: 0, runMs, projection: this.projectionSize(agent) })
+        }
+      }
+    } finally {
+      await handle.dispose()
+    }
+    return { turns, elapsedMs: Date.now() - t0, mode: 'live-agent', samples }
+  }
+
+  /** Bytes and rows actually on disk for this session. */
+  durableSize() {
+    try {
+      const row = this.sql
+        .exec(
+          `SELECT COUNT(*) AS events, SUM(LENGTH(event)) AS bytes,
+                  SUM(CASE WHEN type = 'assistant/chunk' THEN LENGTH(event) ELSE 0 END) AS chunkBytes
+           FROM session_event WHERE id = ?`,
+          this.sessionId,
+        )
+        .toArray()[0]
+      return { events: row?.events ?? 0, bytes: row?.bytes ?? 0, chunkBytes: row?.chunkBytes ?? 0 }
+    } catch {
+      return { events: 0, bytes: 0, chunkBytes: 0 }
+    }
+  }
+
+  /** What the model-facing projection costs, which is what actually sits in memory. */
+  projectionSize(agent) {
+    try {
+      const messages = agent.session.deriveMessages?.()
+      const list = messages ? [...messages] : []
+      return { messages: list.length, bytes: JSON.stringify(list).length }
+    } catch (error) {
+      return { error: String(error?.message ?? error).slice(0, 120) }
     }
   }
 
@@ -243,7 +358,7 @@ export class SessionAgentDO extends DurableObject {
     const byType = (() => {
       try {
         return this.sql
-          .exec('SELECT type, COUNT(*) AS n FROM session_event WHERE id = ? GROUP BY type ORDER BY n DESC', this.sessionId)
+          .exec('SELECT type, COUNT(*) AS n, SUM(LENGTH(event)) AS bytes FROM session_event WHERE id = ? GROUP BY type ORDER BY bytes DESC', this.sessionId)
           .toArray()
       } catch { return [] }
     })()
