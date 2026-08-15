@@ -41,6 +41,25 @@ Holding **one live agent** across turns instead:
 | log growth | 12.4 KB/turn | **3.4 KB/turn** |
 | events per turn | ~20 | ~18 |
 
+## Applied: the agent is now held across turns
+
+The session object keeps one live agent per instance and opens it at most once.
+Hibernation clears it, so the next turn resumes — which is exactly the intended
+boundary: resume on a cold start or a wake, never between two turns of a warm
+object. A failed turn drops the handle so the next turn resumes from the durable
+log rather than inheriting a bad state.
+
+Measured on one object at ~10,000 events, 150 turns each way:
+
+| | live agent | resume per turn |
+|---|---:|---:|
+| per turn | **25.9 ms** | **255.6 ms** |
+| open cost | 214 ms once, then 0 | 167 → 241 ms, growing with the log |
+| log growth | **3.4 KB/turn** | 12.4 KB/turn |
+
+**Ten times faster per turn, and a third of the log growth**, for one cached
+handle. The disconnect acceptance still passes unchanged.
+
 ## What this changes
 
 ### 1. Memory is not the shape-level risk
@@ -54,7 +73,7 @@ realistic one, and would hit other limits first.
 The ladder is not wrong, it is just not urgent. What §6.2 should say is that the
 projection is cheap and the *reload* is what scales.
 
-### 2. Hold the agent live between turns
+### 2. Hold the agent live between turns — done, see above
 
 Resuming per turn costs twice:
 
@@ -103,6 +122,15 @@ local workerd and not on a deployed Worker. What is measurable is what this
 document measures: durable bytes, projected message count and serialized bytes,
 and where time goes. The criterion should be restated in those terms, plus
 "drive it until it breaks" as the ceiling test.
+
+## An unrelated thing this surfaced
+
+Replay-on-connect sends the **entire** log. At 12,565 events that is roughly
+6 MB in a single WebSocket message — under the 32 MiB cap, but wasteful, and it
+grows without bound. Replay needs a cursor, or a bound, or both. Left alone for
+now: the upstream client's own reconnect behaviour has not been checked yet
+(an M0 open question), and there is no point inventing a protocol it will not
+speak.
 
 ## Caveats
 

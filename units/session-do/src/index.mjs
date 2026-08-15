@@ -51,6 +51,10 @@ export class SessionAgentDO extends DurableObject {
     this.queue = new TurnQueue(this.sql)
     this.tree = null
     this.adapter = null
+    // One live agent per Durable Object instance. Hibernation clears this, so
+    // the next turn resumes — which is exactly the intended boundary: resume on
+    // a cold start or a wake, never between two turns of a warm object.
+    this.agent = null
   }
 
   get sessionId() {
@@ -107,8 +111,8 @@ export class SessionAgentDO extends DurableObject {
     if (url.pathname === '/bench') {
       const turns = Number(url.searchParams.get('turns') ?? 50)
       const every = Number(url.searchParams.get('every') ?? 10)
-      const live = url.searchParams.get('live') === '1'
-      return Response.json(live ? await this.benchLive(turns, every) : await this.bench(turns, every))
+      const fresh = url.searchParams.get('fresh') === '1'
+      return Response.json(await this.bench(turns, every, fresh))
     }
 
     // Enqueue over HTTP too, so the behaviour is testable without a socket.
@@ -170,23 +174,44 @@ export class SessionAgentDO extends DurableObject {
     }
   }
 
+  /**
+   * The live agent for this object, opened at most once per instance.
+   *
+   * Measured (docs/M1-growth-measurement.md): opening per turn costs twice —
+   * resume reads the whole log, which is O(n) and passed the turn's own cost by
+   * 250 turns, and each resume re-logs the ~9 KB `request/header`, tripling log
+   * growth from 3.4 to 12.4 KB per turn. Holding the agent is flat at ~30 ms a
+   * turn out to 6831 events.
+   */
+  async ensureAgent(ctx) {
+    if (this.agent) return { agent: this.agent.agent, openedMs: 0 }
+
+    // A Durable Object woken from hibernation must resume: create() on an id
+    // that already has a persisted log is rejected as an id collision, and the
+    // rejection surfaces only inside the session log.
+    const persisted = this.maxSeq() !== null
+    const tOpen = Date.now()
+    this.agent = persisted
+      ? await ctx.agents.resume({ resumeSessionId: this.sessionId, agentOptions: AGENT_OPTIONS })
+      : await ctx.agents.create({ sessionId: this.sessionId, agentOptions: AGENT_OPTIONS })
+    return { agent: this.agent.agent, openedMs: Date.now() - tOpen }
+  }
+
+  /** Drop the live agent so the next turn opens a clean one. */
+  async releaseAgent() {
+    const held = this.agent
+    this.agent = null
+    if (held) { try { await held.dispose() } catch { /* already gone */ } }
+  }
+
   async runTurn(prompt) {
     const { ctx, assembleMs } = await this.ensureTree()
     const seqBefore = this.maxSeq()
     const callsBefore = this.adapter.calls
     const t0 = Date.now()
-    let resumeMs = 0
 
-    // A Durable Object woken from hibernation must resume: create() on an id
-    // that already has a persisted log is rejected as an id collision, and the
-    // rejection surfaces only inside the session log.
-    const persisted = seqBefore !== null
-    const tOpen = Date.now()
-    const handle = persisted
-      ? await ctx.agents.resume({ resumeSessionId: this.sessionId, agentOptions: AGENT_OPTIONS })
-      : await ctx.agents.create({ sessionId: this.sessionId, agentOptions: AGENT_OPTIONS })
-    resumeMs = Date.now() - tOpen
-    const agent = handle.agent
+    const { agent, openedMs } = await this.ensureAgent(ctx)
+    const resumeMs = openedMs
     const tRun = Date.now()
 
     try {
@@ -218,8 +243,12 @@ export class SessionAgentDO extends DurableObject {
           projection: this.projectionSize(agent),
         },
       }
-    } finally {
-      await handle.dispose()
+    } catch (error) {
+      // A failed turn may leave the agent in a state the next turn should not
+      // inherit, so the handle is dropped and the next turn resumes from the
+      // durable log instead.
+      await this.releaseAgent()
+      throw error
     }
   }
 
@@ -237,11 +266,14 @@ export class SessionAgentDO extends DurableObject {
    * this measures the things that *are* observable and that heap tracks:
    * durable bytes, projected message bytes, and where time goes.
    */
-  async bench(turns, sampleEvery) {
+  async bench(turns, sampleEvery, fresh = false) {
     await this.ensureTree()
     const samples = []
     const t0 = Date.now()
     for (let i = 0; i < turns; i++) {
+      // `fresh` reproduces the pre-optimisation behaviour — open the agent per
+      // turn — so the two paths can be compared in one run.
+      if (fresh) await this.releaseAgent()
       const result = await this.runTurn(`bench turn ${i}`)
       if (!result.ok) {
         samples.push({ turn: i, failed: true, reason: result.reason })
@@ -257,40 +289,7 @@ export class SessionAgentDO extends DurableObject {
         })
       }
     }
-    return { turns, elapsedMs: Date.now() - t0, samples }
-  }
-
-  /**
-   * The same benchmark, but holding ONE agent across every turn instead of
-   * resuming per turn. Resume reloads the whole log, so this separates
-   * "what a turn costs" from "what reloading the session costs".
-   */
-  async benchLive(turns, sampleEvery) {
-    const { ctx } = await this.ensureTree()
-    const samples = []
-    const t0 = Date.now()
-    const persisted = this.maxSeq() !== null
-    const handle = persisted
-      ? await ctx.agents.resume({ resumeSessionId: this.sessionId, agentOptions: AGENT_OPTIONS })
-      : await ctx.agents.create({ sessionId: this.sessionId, agentOptions: AGENT_OPTIONS })
-    const agent = handle.agent
-    try {
-      for (let i = 0; i < turns; i++) {
-        const tRun = Date.now()
-        agent.followup(createUserMessage({
-          content: [{ type: 'text', text: `live bench turn ${i}` }],
-          source: { kind: 'user' },
-        }))
-        await agent.whenIdle()
-        const runMs = Date.now() - tRun
-        if (i % sampleEvery === 0 || i === turns - 1) {
-          samples.push({ turn: i, ...this.durableSize(), resumeMs: 0, runMs, projection: this.projectionSize(agent) })
-        }
-      }
-    } finally {
-      await handle.dispose()
-    }
-    return { turns, elapsedMs: Date.now() - t0, mode: 'live-agent', samples }
+    return { turns, mode: fresh ? 'resume-per-turn' : 'live-agent', elapsedMs: Date.now() - t0, samples }
   }
 
   /** Bytes and rows actually on disk for this session. */
