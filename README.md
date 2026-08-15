@@ -70,19 +70,22 @@ cd units/session-do && npx wrangler deploy && cd ../..
 cd units/edge      && npx wrangler deploy && cd ../..
 ```
 
-Then put **Cloudflare Access** in front of the hostname (Zero Trust → Access →
-Applications), and set two vars on `dsh-edge`:
+Then protect `dsh-edge` with **Cloudflare Access**, from the Workers dashboard:
+open the Worker, go to its **Access** tab, and enable it with a policy. (You can
+also protect every Worker in the account at once, or a specific hostname or
+path. The most specific rule wins.) Zero Trust must be enabled on the account.
 
-```bash
-npx wrangler secret put ACCESS_TEAM_DOMAIN   # <your-team>.cloudflareaccess.com
-npx wrangler secret put ACCESS_AUD           # the Access application's AUD tag
+There is nothing to configure in code. Access authenticates before the request
+reaches the Worker, and the identity arrives as a runtime API:
+
+```js
+const identity = await ctx.access.getIdentity()   // undefined if not authenticated
 ```
 
-Access gates the hostname before any request reaches the Worker, so there is no
-login page to build and no account system to run. The edge verifies the
-assertion, reduces it to `tenant` / `user` / `scopes`, and derives every Durable
-Object name from those claims — a client never supplies any part of the name, so
-it cannot address another user's session.
+So there is no login page to build, no account system to run, and no token to
+verify. The edge reduces that identity to `tenant` / `user` / `scopes` and
+derives every Durable Object name from it — a client never supplies any part of
+the name, so it cannot address another user's session.
 
 ## Run it locally
 

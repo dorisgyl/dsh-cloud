@@ -17,24 +17,18 @@ function sessionIdFrom(url) {
   return url.searchParams.get('session') ?? 'default'
 }
 
-function unauthorized(env) {
-  // Distinguish "you are not signed in" from "this deployment has no identity
-  // configured at all" — the second is a deployment mistake, not a user error,
-  // and silently 401ing it wastes the self-deployer's afternoon.
-  const configured = Boolean((env.ACCESS_TEAM_DOMAIN && env.ACCESS_AUD) || env.DEV_IDENTITY)
-  return Response.json(
-    configured
-      ? { error: 'unauthorized' }
-      : {
-          error: 'identity-not-configured',
-          hint: 'Set ACCESS_TEAM_DOMAIN and ACCESS_AUD for Cloudflare Access, or DEV_IDENTITY for local development.',
-        },
-    { status: configured ? 401 : 503 },
-  )
+// `ctx.access` being undefined means Access did not authenticate the request —
+// which is either "not signed in" or "this deployment is not protected at all".
+// The second is a deployment mistake, not a user error, and answering it with a
+// bare 401 wastes the self-deployer's afternoon.
+const NOT_PROTECTED = {
+  error: 'access-not-configured',
+  hint: 'Protect this Worker with Cloudflare Access (Workers dashboard > Access), '
+    + 'or add an access.dev block to wrangler.jsonc for local development.',
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url)
 
     // Everything outside /api is the UI. Assets are public: Access, when
@@ -43,11 +37,14 @@ export default {
       return env.ASSETS.fetch(request)
     }
 
-    const claims = await identify(request, env)
-    if (!claims) return unauthorized(env)
+    const claims = await identify(ctx, env)
+    if (!claims) return Response.json(NOT_PROTECTED, { status: 403 })
 
     if (url.pathname === `${API_PREFIX}/whoami`) {
-      return Response.json({ tenant: claims.tenant, user: claims.user, scopes: claims.scopes })
+      return Response.json({
+        tenant: claims.tenant, user: claims.user, scopes: claims.scopes,
+        email: claims.email, aud: claims.aud,
+      })
     }
 
     // The object name is built entirely from verified claims; the caller

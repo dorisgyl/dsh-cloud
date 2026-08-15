@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "Edge identity: verify Cloudflare Access and reduce it to the internal claim set.",
+  "description": "Edge identity: read Cloudflare Access via ctx.access and reduce it to the internal claim set.",
   "exports": { ".": "./src/index.mjs" },
-  "dependencies": { "jose": "^6.0.0" }
+  "dependencies": {}
 }

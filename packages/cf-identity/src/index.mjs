@@ -1,84 +1,72 @@
 // cf-identity — the edge's single identity convergence point.
 //
-// The deployment's front door is Cloudflare Access (ADR-07): it is part of the
-// platform, free below 50 users, needs no code, and — decisively — asks the
-// self-deployer to own no account system of ours. Access authenticates before a
-// request reaches the Worker and presents a signed assertion; everything below
-// the edge sees only the internal claim set.
+// The front door is Cloudflare Access (ADR-07): part of the platform, free
+// below 50 users, no code, and — decisively — it asks the self-deployer to own
+// no account system of ours. Access authenticates before the request reaches
+// the Worker.
 //
-// The convergence exists even though there is exactly one upstream today. It is
-// what keeps a change of identity source from reaching the other five units,
-// and it is where the rule "the Durable Object name comes from claims, never
-// from client input" is enforced.
-import { createRemoteJWKSet, jwtVerify } from 'jose'
-
-/** Access presents its assertion in this header, and in a cookie as a fallback. */
-const HEADER = 'cf-access-jwt-assertion'
-const COOKIE = 'CF_Authorization'
-
-// createRemoteJWKSet caches fetched keys internally; cache the set per team so
-// a burst of requests does not refetch.
-const jwks = new Map()
-function keysFor(teamDomain) {
-  const url = `https://${teamDomain}/cdn-cgi/access/certs`
-  let set = jwks.get(url)
-  if (!set) {
-    set = createRemoteJWKSet(new URL(url))
-    jwks.set(url, set)
-  }
-  return set
-}
-
-export function readAssertion(request) {
-  const header = request.headers.get(HEADER)
-  if (header) return header
-  const cookie = request.headers.get('cookie') ?? ''
-  const match = cookie.match(new RegExp(`(?:^|;\\s*)${COOKIE}=([^;]+)`))
-  return match?.[1] ?? null
-}
+// Workers expose the authenticated identity as a first-class runtime API,
+// `ctx.access`, so there is no token to parse:
+//
+//   * `ctx.access` is `undefined` when Access did not authenticate the request
+//   * `ctx.access.getIdentity()` returns the signed-in user's claims
+//   * `ctx.access.aud` is the Access application's audience tag
+//
+// An earlier version of this file verified the `CF_Authorization` JWT by hand
+// against the team's JWKS with `jose`. That worked, but it was strictly worse:
+// a dependency, a JWKS fetch (a subrequest whenever the cache is cold), two
+// configuration values to keep in sync, and a second code path for local
+// development that the deployed path never exercised.
+//
+// `ctx.access` is only available on the entry Worker's `fetch(request, env, ctx)`.
+// Inside a Durable Object `ctx` is the object's own state, so identity is
+// resolved once at the edge and carried downwards explicitly.
 
 /**
- * Verify an Access assertion and reduce it to the internal claim set.
- * @returns the claims, or null when the assertion is absent or invalid
+ * Resolve identity for a request from the Access runtime API.
+ *
+ * Local development uses the same API: `wrangler.jsonc` carries an
+ * `access.dev` block that populates `ctx.access` without a login flow, so the
+ * local and deployed code paths are identical rather than merely similar.
+ *
+ * @param ctx the entry Worker's execution context
+ * @param env bindings, for the tenant name
+ * @returns the internal claim set, or null when Access did not authenticate
  */
-export async function verifyAccess(request, config) {
-  const token = readAssertion(request)
-  if (!token) return null
+export async function identify(ctx, env) {
+  if (!ctx?.access) return null
+  let identity
   try {
-    const { payload } = await jwtVerify(token, keysFor(config.teamDomain), {
-      issuer: `https://${config.teamDomain}`,
-      audience: config.aud,
-    })
-    return toInternalClaims(payload, config)
+    identity = await ctx.access.getIdentity()
   } catch {
     return null
   }
+  return toInternalClaims(identity, { tenant: env?.TENANT, aud: ctx.access.aud })
 }
 
 /**
- * Reduce a verified upstream payload to `tenant` / `user` / `scopes` / `exp`.
+ * Reduce Access's identity to `tenant` / `user` / `scopes`.
  *
  * A self-deployed instance is one tenant, so `tenant` comes from configuration
- * rather than from the token — a claim the user controls must never choose the
- * shard. `user` prefers Access's stable subject over the e-mail, which can be
- * reassigned.
+ * rather than from the identity — a value the user controls must never choose
+ * the shard.
  */
-export function toInternalClaims(payload, config) {
-  const user = payload.sub || payload.email
+export function toInternalClaims(identity, config = {}) {
+  const user = identity?.user_uuid || identity?.sub || identity?.email
   if (!user) return null
   return {
     tenant: config.tenant ?? 'default',
     user: String(user),
     scopes: ['session:read', 'session:write'],
-    exp: payload.exp ?? null,
-    email: payload.email ?? null,
+    email: identity?.email ?? null,
+    aud: config.aud ?? null,
   }
 }
 
 /**
- * The three-segment shard name (design 4.4). Derived entirely from claims:
- * a client cannot name someone else's object, because it never supplies any
- * part of this string.
+ * The three-segment shard name (design 4.4). Derived entirely from claims: a
+ * client cannot name someone else's object, because it never supplies any part
+ * of this string except the session segment, and only inside its own prefix.
  */
 export function sessionObjectName(claims, sessionId) {
   if (!/^[A-Za-z0-9._-]{1,128}$/.test(sessionId)) {
@@ -89,24 +77,4 @@ export function sessionObjectName(claims, sessionId) {
 
 export function tenantObjectName(claims) {
   return `tenant/${claims.tenant}/user/${claims.user}`
-}
-
-/**
- * Resolve identity for a request.
- *
- * `DEV_IDENTITY` exists because Access sits in front of the deployment, not in
- * front of `wrangler dev`; without it nothing is testable locally. It is read
- * only when Access is unconfigured, so a deployed instance cannot fall into it
- * by forgetting a flag.
- */
-export async function identify(request, env) {
-  const teamDomain = env.ACCESS_TEAM_DOMAIN
-  const aud = env.ACCESS_AUD
-  if (teamDomain && aud) {
-    return verifyAccess(request, { teamDomain, aud, tenant: env.TENANT })
-  }
-  if (env.DEV_IDENTITY) {
-    return { tenant: env.TENANT ?? 'default', user: env.DEV_IDENTITY, scopes: ['session:read', 'session:write'], exp: null, email: null }
-  }
-  return null
 }

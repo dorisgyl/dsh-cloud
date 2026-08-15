@@ -17,9 +17,18 @@
 
   "vars": {
     "TENANT": "default"
-    // Deployed instances set ACCESS_TEAM_DOMAIN and ACCESS_AUD instead.
-    // DEV_IDENTITY is read only when Access is unconfigured, so a deployed
-    // instance cannot fall back into it by forgetting a flag.
+  },
+
+  // Local development populates `ctx.access` with the same shape production
+  // does, so there is no separate unauthenticated code path to keep in sync.
+  // Delete this block to test what an unprotected request sees.
+  // In production, protect the Worker from the Workers dashboard (Access tab)
+  // — nothing here changes.
+  "access": {
+    "dev": {
+      "aud": "dsh-cloud-dev",
+      "identity": { "email": "dev@localhost" }
+    }
   }
 
   // `workers_dev` is deliberately absent. *.workers.dev is blocked outright on
