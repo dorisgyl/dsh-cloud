@@ -70,10 +70,19 @@ cd units/session-do && npx wrangler deploy && cd ../..
 cd units/edge      && npx wrangler deploy && cd ../..
 ```
 
-Then protect `dsh-edge` with **Cloudflare Access**, from the Workers dashboard:
-open the Worker, go to its **Access** tab, and enable it with a policy. (You can
-also protect every Worker in the account at once, or a specific hostname or
-path. The most specific rule wins.) Zero Trust must be enabled on the account.
+Then protect `dsh-edge` with **Cloudflare Access**. Zero Trust must be enabled
+on the account.
+
+> **Use a hostname-based application, not the Worker's Access tab.**
+> Worker-level Access policies do not support WebSockets: an upgrade request to
+> a Worker protected that way fails with 403. This app is WebSocket-based, so
+> Worker-level Access would break it while looking correctly configured.
+
+Create it in **Zero Trust → Access → Applications → Self-hosted**, with your
+deployment's hostname as the application domain. Add an `Allow` policy for
+whoever should sign in. For machine access — CI, scripted tests — add a second
+policy with **Action: Service Auth** and a service token; that option exists
+only in the full Zero Trust editor, not in the Workers dashboard panel.
 
 There is nothing to configure in code. Access authenticates before the request
 reaches the Worker, and the identity arrives as a runtime API:

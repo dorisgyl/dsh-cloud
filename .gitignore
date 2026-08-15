@@ -51,3 +51,7 @@ node_modules/
 build/
 .wrangler/
 *.tsbuildinfo
+
+# Local Access service token, never committed
+.access-token
+.dev.vars
