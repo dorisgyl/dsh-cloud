@@ -15,6 +15,7 @@ import { modules } from '../build/plugins.generated.js'
 import { assemble, servicesOn, unmetInjects } from '../../../packages/cf-boot/src/plugin-tree.mjs'
 import { StubLlmAdapter } from '../../../packages/cf-testing/src/stub-llm-adapter.mjs'
 import { WorkersAiAdapter, resolveModelId } from '../../../packages/cf-llm-transport/src/workers-ai.mjs'
+import { withCoalescing } from '../../../packages/cf-llm-transport/src/coalesce.mjs'
 import cfStorageDo from '../../../packages/cf-storage-do/src/index.mjs'
 import { CfSessionPersistenceDo } from '../../../packages/cf-session-persistence-do/src/index.mjs'
 import { TurnQueue } from './turn-queue.mjs'
@@ -66,6 +67,9 @@ export class SessionAgentDO extends DurableObject {
     // Set per request so a measurement can pin a model without a redeploy.
     this.modelOverride = null
     this.providerOverride = null
+    // Log granularity, overridable per request so the sweep can measure the
+    // curve rather than one point.
+    this.coalescing = {}
     this.tree = null
     this.adapter = null
     this.stub = null
@@ -101,11 +105,14 @@ export class SessionAgentDO extends DurableObject {
 
     // Both routes are always registered; which one an agent uses is its
     // `agentOptions.provider`, decided per request rather than at build time.
+    // Both adapters stream through the same coalescer (ADR-10). The agent loop
+    // writes one log entry per chunk an adapter yields, so this is the only
+    // place the log's granularity can be set.
     this.stub = new StubLlmAdapter({ reply: 'Hello from a Durable Object.', chunkSize: 6 })
-    ctx.llm.registerAdapter(['stub'], this.stub)
+    ctx.llm.registerAdapter(['stub'], withCoalescing(this.stub, this.coalescing))
     if (this.env?.AI) {
       this.workersAi = new WorkersAiAdapter(this.env.AI)
-      ctx.llm.registerAdapter(['workers-ai'], this.workersAi)
+      ctx.llm.registerAdapter(['workers-ai'], withCoalescing(this.workersAi, this.coalescing))
     }
     this.adapter = this.workersAi ?? this.stub
 
@@ -139,6 +146,11 @@ export class SessionAgentDO extends DurableObject {
         replyChars: Number(url.searchParams.get('reply') ?? 250),
         chunkChars: Number(url.searchParams.get('chunk') ?? 24),
         turns: Number(url.searchParams.get('turns') ?? 5),
+        coalesce: url.searchParams.get('coalesce') === 'off'
+          ? { maxChars: 1, maxMs: 0 }
+          : url.searchParams.has('maxChars')
+            ? { maxChars: Number(url.searchParams.get('maxChars')), maxMs: Number(url.searchParams.get('maxMs') ?? 120) }
+            : {},
       }))
     }
 
@@ -346,11 +358,18 @@ export class SessionAgentDO extends DurableObject {
    * of how few characters it carries, so chunk cost is driven by the number of
    * entries, which is reply length divided by delta size.
    */
-  async sweep({ replyChars, chunkChars, turns }) {
+  async sweep({ replyChars, chunkChars, turns, coalesce }) {
     const { ctx } = await this.ensureTree()
     // Reconfigure the deterministic adapter for this point, and reopen the
     // agent so nothing from a previous configuration leaks in.
     await this.releaseAgent()
+    // Changing coalescing changes the registered adapters, so the tree is
+    // rebuilt rather than mutated underneath a live agent.
+    if (JSON.stringify(coalesce ?? {}) !== JSON.stringify(this.coalescing)) {
+      this.coalescing = coalesce ?? {}
+      this.tree = null
+    }
+    await this.ensureTree()
     this.stub.reply = 'x'.repeat(replyChars)
     this.stub.chunkSize = chunkChars
     this.modelOverride = null

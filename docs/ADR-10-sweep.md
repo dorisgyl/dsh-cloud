@@ -101,6 +101,47 @@ That last point is the crux: **the log and the live stream do not have to share
 a granularity.** ADR-10 conflated them, which is why removing chunks from the
 log looked like the only lever.
 
+## Implemented, and one thing the sweep got wrong
+
+`packages/cf-llm-transport/src/coalesce.mjs` wraps any adapter so consecutive
+text deltas merge before the agent loop sees them. Defaults: 96 characters or
+120 ms, whichever comes first.
+
+Measured end to end at 8-character source deltas:
+
+| reply chars | uncoalesced | coalesced | reduction |
+|---:|---:|---:|---:|
+| 500 | 12.2 KB | 6.5 KB | 1.9x |
+| 2000 | 34.4 KB | 11.3 KB | 3.0x |
+| 8000 | 124.4 KB | 30.8 KB | **4.0x** |
+
+Chunk entries at 8,000 characters: 753 to 66. The assembled message still
+carries the full text (1,390 bytes for a 1,000-character reply), and
+`scripts/test-coalesce.mjs` covers the properties that matter: text preserved
+verbatim, non-text chunks keep their order and force a flush, deltas for
+different blocks never merge, a slow stream flushes on time.
+
+### The correction
+
+This document proposed that "the log and the live stream do not have to share a
+granularity — the WebSocket push can stay at full granularity independently,
+since it is not the log."
+
+Reading `dsh-agent-loop` shows that is architecturally true and **false in this
+implementation**:
+
+```js
+for await (const chunk of stream) {
+  chunkSeqs.push(this.session.append("assistant/chunk", {turn, step, chunk}).seq)
+  assembler.push(chunk)
+}
+```
+
+One log entry per adapter chunk, unbuffered — and the UI streams from those same
+log events. There is no separate live channel to keep fine. Coalescing the log
+coalesces the visible typing, which is why the defaults are chosen against the
+eye's threshold rather than to minimise bytes.
+
 ## Reproduce
 
 ```bash
