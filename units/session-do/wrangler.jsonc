@@ -1,13 +1,15 @@
 {
-  // M1 step 1: a real Durable Object that assembles the plugin tree and runs
-  // one agent turn. Not yet the final U2 configuration — no persistence, no
-  // alarm-driven turn loop, no edge in front of it.
+  // U2 SessionAgentDO. Reached only through U1 dsh-edge.
   "name": "dsh-session-do",
   "main": "build/u2.bundle.js",
   // node:fs needs >= 2025-09-01. From >= 2026-08-04 nodejs_compat is on by
   // default and these flags become redundant (confirmed during M0).
   "compatibility_date": "2026-08-01",
   "compatibility_flags": ["nodejs_compat"],
+
+  // The session object is reached through U1 dsh-edge, never directly. Leaving
+  // a *.workers.dev hostname on it would expose an unauthenticated agent.
+  "workers_dev": false,
   "durable_objects": {
     "bindings": [
       { "name": "SESSION", "class_name": "SessionAgentDO" }
