@@ -1,0 +1,13 @@
+{
+  "name": "cf-testing",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Test doubles for exercising the agent tree without external services.",
+  "exports": {
+    "./stub-llm-adapter": "./src/stub-llm-adapter.mjs"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-llm": "0.1.0-rc.6"
+  }
+}

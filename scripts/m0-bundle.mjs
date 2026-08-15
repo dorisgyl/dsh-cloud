@@ -140,7 +140,7 @@ const result = await esbuild.build({
   format: 'esm',
   platform: 'browser',
   conditions: ['workerd', 'worker', 'browser', 'import', 'module', 'default'],
-  external: ['node:*'],
+  external: ['node:*', 'cloudflare:*'],
   plugins: [stubPlugin, requireShim, aliasPlugin, lazySignal],
   outfile: './units/session-do/build/u2.bundle.js',
   metafile: true,
