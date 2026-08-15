@@ -1,0 +1,3 @@
+packages:
+  - 'units/*'
+  - 'packages/*'

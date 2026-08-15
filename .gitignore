@@ -45,3 +45,9 @@ spike/
 eval/reports/
 
 .superpowers/
+
+# Node / pnpm
+node_modules/
+build/
+.wrangler/
+*.tsbuildinfo

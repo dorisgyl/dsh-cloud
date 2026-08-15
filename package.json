@@ -1,0 +1,19 @@
+{
+  "name": "dsh-cloud",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@10.30.2",
+  "scripts": {
+    "m0:bundle": "node scripts/m0-bundle.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10",
+    "wrangler": "^4.123.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "workerd",
+      "esbuild"
+    ]
+  }
+}
