@@ -47,8 +47,12 @@ const CONFIG = {
 // talks to a Cloudflare-hosted DeepSeek model and needs no key at all. Without
 // it — local dev, or a deployment that did not add the binding — the
 // deterministic stub keeps everything testable.
-function chooseProvider(env, modelOverride) {
-  if (!env?.AI) return { provider: 'stub', model: 'stub-1' }
+function chooseProvider(env, modelOverride, providerOverride) {
+  // The AI binding is present locally too, but calling it fails with
+  // "Binding AI needs to be run remotely" — so a measurement that wants the
+  // deterministic adapter has to ask for it explicitly rather than rely on the
+  // binding being absent.
+  if (providerOverride === 'stub' || !env?.AI) return { provider: 'stub', model: 'stub-1' }
   return { provider: 'workers-ai', model: modelOverride || resolveModelId(env) }
 }
 
@@ -61,6 +65,7 @@ export class SessionAgentDO extends DurableObject {
     this.env = env
     // Set per request so a measurement can pin a model without a redeploy.
     this.modelOverride = null
+    this.providerOverride = null
     this.tree = null
     this.adapter = null
     this.stub = null
@@ -127,6 +132,14 @@ export class SessionAgentDO extends DurableObject {
 
     if (url.pathname === '/state') {
       return Response.json(await this.snapshot())
+    }
+
+    if (url.pathname === '/sweep') {
+      return Response.json(await this.sweep({
+        replyChars: Number(url.searchParams.get('reply') ?? 250),
+        chunkChars: Number(url.searchParams.get('chunk') ?? 24),
+        turns: Number(url.searchParams.get('turns') ?? 5),
+      }))
     }
 
     if (url.pathname === '/bench') {
@@ -219,8 +232,8 @@ export class SessionAgentDO extends DurableObject {
     const persisted = this.maxSeq() !== null
     const tOpen = Date.now()
     this.agent = persisted
-      ? await ctx.agents.resume({ resumeSessionId: this.sessionId, agentOptions: chooseProvider(this.env, this.modelOverride) })
-      : await ctx.agents.create({ sessionId: this.sessionId, agentOptions: chooseProvider(this.env, this.modelOverride) })
+      ? await ctx.agents.resume({ resumeSessionId: this.sessionId, agentOptions: chooseProvider(this.env, this.modelOverride, this.providerOverride) })
+      : await ctx.agents.create({ sessionId: this.sessionId, agentOptions: chooseProvider(this.env, this.modelOverride, this.providerOverride) })
     return { agent: this.agent.agent, openedMs: Date.now() - tOpen }
   }
 
@@ -319,6 +332,69 @@ export class SessionAgentDO extends DurableObject {
     return { turns, mode: fresh ? 'resume-per-turn' : 'live-agent', elapsedMs: Date.now() - t0, samples }
   }
 
+  /**
+   * Reply-length sweep for the ADR-10 decision.
+   *
+   * ADR-10 drops `assistant/chunk` from the durable log. Whether that is worth
+   * its costs depends on what share of the log chunks actually are — and every
+   * measurement so far gave a different answer, because each was a single point
+   * under conditions that turned out not to generalise. A curve is harder to
+   * mislead with than a point.
+   *
+   * The two variables are the reply length and the provider's delta size, and
+   * they matter differently: an entry costs ~120 bytes of structure regardless
+   * of how few characters it carries, so chunk cost is driven by the number of
+   * entries, which is reply length divided by delta size.
+   */
+  async sweep({ replyChars, chunkChars, turns }) {
+    const { ctx } = await this.ensureTree()
+    // Reconfigure the deterministic adapter for this point, and reopen the
+    // agent so nothing from a previous configuration leaks in.
+    await this.releaseAgent()
+    this.stub.reply = 'x'.repeat(replyChars)
+    this.stub.chunkSize = chunkChars
+    this.modelOverride = null
+    // The sweep is about log shape, not about any particular model, so it runs
+    // on the deterministic adapter where reply length is an input.
+    this.providerOverride = 'stub'
+
+    const before = this.byType()
+    for (let i = 0; i < turns; i++) {
+      const result = await this.runTurn(`sweep ${i}`)
+      if (!result.ok) return { replyChars, chunkChars, turns, failed: result.reason }
+    }
+    const after = this.byType()
+
+    const delta = {}
+    let total = 0
+    for (const [type, row] of Object.entries(after)) {
+      const prev = before[type] ?? { n: 0, bytes: 0 }
+      const bytes = row.bytes - prev.bytes
+      const count = row.n - prev.n
+      if (bytes || count) { delta[type] = { count, bytes }; total += bytes }
+    }
+    const chunk = delta['assistant/chunk'] ?? { count: 0, bytes: 0 }
+    return {
+      replyChars, chunkChars, turns,
+      bytesPerTurn: Math.round(total / turns),
+      chunkEntriesPerTurn: Math.round(chunk.count / turns),
+      chunkBytesPerTurn: Math.round(chunk.bytes / turns),
+      chunkShare: total ? +(100 * chunk.bytes / total).toFixed(1) : 0,
+      delta,
+    }
+  }
+
+  byType() {
+    try {
+      const rows = this.sql
+        .exec('SELECT type, COUNT(*) AS n, SUM(LENGTH(event)) AS bytes FROM session_event WHERE id = ? GROUP BY type', this.sessionId)
+        .toArray()
+      return Object.fromEntries(rows.map((r) => [r.type, r]))
+    } catch {
+      return {}
+    }
+  }
+
   /** Bytes and rows actually on disk for this session. */
   durableSize() {
     try {
@@ -411,8 +487,10 @@ export class SessionAgentDO extends DurableObject {
 
 export default {
   async fetch(request, env) {
-    // One object per session; this milestone uses a single fixed name.
-    const id = env.SESSION.idFromName('m1-step3')
+    // One object per session. `?obj=` exists so a measurement can start from a
+    // clean log instead of inheriting whatever the previous run left behind.
+    const url = new URL(request.url)
+    const id = env.SESSION.idFromName(url.searchParams.get('obj') ?? 'm1-step3')
     return env.SESSION.get(id).fetch(request)
   },
 }
