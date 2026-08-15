@@ -1,6 +1,12 @@
-// M0: 扫描 U2 包在**模块顶层**(非函数体内)调用 workerd 禁止的操作。
-// workerd 禁止全局作用域内: 异步 I/O(fetch/connect)、设定时器(setTimeout/setInterval)、
-// 生成随机数(randomUUID/getRandomValues/Math.random)。Node 无此限制,上游随手就写。
+// M0: scan U2's packages for workerd-forbidden operations at MODULE SCOPE.
+//
+// workerd disallows, in global scope: async I/O (fetch/connect), arming timers
+// (setTimeout/setInterval) and generating random values. Node has no such rule,
+// so upstream code written for Node does this freely.
+//
+// This is a heuristic pre-filter, not a gate. It cannot catch every case — the
+// real M0 failure was `new AbortController()`, which appears on no list of
+// dangerous APIs. Only booting workerd is authoritative.
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
@@ -16,7 +22,8 @@ function walk(d, out = []) {
   return out
 }
 
-// 粗略的顶层判定:统计到该行为止未闭合的花括号深度,深度 0 即模块顶层。
+// Crude module-scope test: track unclosed brace/paren depth up to the line;
+// depth 0 means module scope.
 function topLevelHits(src) {
   const hits = []
   let depth = 0
@@ -42,9 +49,9 @@ for (const pkg of readdirSync(ROOT)) {
   }
 }
 
-if (!results.length) console.log('未发现模块顶层的禁止操作。')
+if (!results.length) console.log('No module-scope forbidden operations found (heuristic).')
 for (const r of results) {
   console.log(`\n[${r.pkg}] ${r.file}`)
   for (const h of r.hits) console.log(`   L${h.line}: ${h.text}`)
 }
-console.log(`\n命中文件数: ${results.length}  涉及包: ${[...new Set(results.map(r => r.pkg))].length}`)
+console.log(`\nfiles matched: ${results.length}  packages: ${[...new Set(results.map(r => r.pkg))].length}`)

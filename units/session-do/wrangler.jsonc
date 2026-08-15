@@ -1,8 +1,11 @@
 {
-  // M0 运行时探针:不是最终的 U2 配置,只用来验证 88 个上游包能否在 workerd 里完成 import。
+  // M0/M1 probe, not the final U2 configuration. It exists to verify that the
+  // upstream packages import, and then that they assemble into a running
+  // Cordis plugin tree, inside workerd.
   "name": "m0-import-probe",
   "main": "build/u2.bundle.js",
-  // node:fs 需要 >= 2025-09-01;>= 2026-08-04 则 nodejs_compat 默认开启(M0 实测确认)
+  // node:fs needs >= 2025-09-01. From >= 2026-08-04 nodejs_compat is on by
+  // default and these flags become redundant (confirmed during M0).
   "compatibility_date": "2026-08-01",
   "compatibility_flags": ["nodejs_compat"]
 }

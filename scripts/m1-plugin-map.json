@@ -1,0 +1,865 @@
+[
+  {
+    "name": "@deepseek-ai/cordis",
+    "kind": "library",
+    "exports": [
+      "Context",
+      "CordisError",
+      "DisposableList",
+      "EventsService",
+      "Fiber",
+      "Inject",
+      "Logger",
+      "LoggerService"
+    ]
+  },
+  {
+    "name": "@deepseek-ai/cordis-plugin-group",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "Group",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/cordis-plugin-timer",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "TimerService",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/cosmokit",
+    "kind": "library",
+    "exports": [
+      "Binary",
+      "Time",
+      "arrayBufferToBase64",
+      "arrayBufferToHex",
+      "base64ToArrayBuffer",
+      "camelCase",
+      "camelize",
+      "capitalize"
+    ]
+  },
+  {
+    "name": "@deepseek-ai/dsh-agent",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "AgentRegistry",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-agent-default-model",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "AgentDefaultModelConfig",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-agent-instructions",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "agent-instructions",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-agent-loop",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "AgentLoop",
+    "inject": [
+      "agents",
+      "sessions",
+      "llm",
+      "tools",
+      "systemPrompt"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-agent-presets",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "AgentPresets",
+    "inject": [
+      "loader"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-agent-tool-presentation",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "tool-presentation",
+    "inject": [
+      "tools"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-api-gateway",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "TypertGatewayService",
+    "inject": [
+      "typert"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-api-remotes",
+    "kind": "object",
+    "from": "module",
+    "pluginName": null,
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-attachment",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "AttachmentStore",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-brand",
+    "kind": "library",
+    "exports": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-command-compact",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "command-compact",
+    "inject": [
+      "commands",
+      "compaction"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-command-feedback",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "command-feedback",
+    "inject": [
+      "commands"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-command-goal",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "command-goal",
+    "inject": [
+      "commands",
+      "goals"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-commands",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "CommandRuntime",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-compaction",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "CompactionEngine",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-compaction-basic",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "BasicCompactionEngine",
+    "inject": [
+      "llm",
+      "tokenMeter",
+      "sessions"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-compaction-tool-result-pruner",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "ToolResultPruner",
+    "inject": [
+      "tokenMeter"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-cordis-client-runner",
+    "kind": "object",
+    "from": "module",
+    "pluginName": null,
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-credentials",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "CredentialProvider",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-fs",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "FileSystem",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-fs-observation-policy",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "fs-observation-policy",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-goal",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "GoalService",
+    "inject": [
+      "agents"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-goal-round-driver",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "goal-round-driver",
+    "inject": [
+      "agents",
+      "goals",
+      "sessions"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-invariants",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "InvariantRegistry",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-jobs",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "JobRegistry",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-llm",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "LlmRuntime",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-llm-deepseek",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "llm-deepseek",
+    "inject": [
+      "llm"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-llm-retry",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "llm-retry",
+    "inject": [
+      "agents"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-message-feedback",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "MessageFeedbackService",
+    "inject": [
+      "storageDomain",
+      "sessionPersistence",
+      "sessions"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-output-retention",
+    "kind": "library",
+    "exports": [
+      "ItemRetainer",
+      "TextRetainer",
+      "describeOmitted",
+      "formatRetentionNotice"
+    ]
+  },
+  {
+    "name": "@deepseek-ai/dsh-permission-presets",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "PermissionPresetService",
+    "inject": [
+      "shell",
+      "approval",
+      "sessions"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-plan-mode",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "PlanModeController",
+    "inject": [
+      "tools",
+      "systemPrompt"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-repeat-tool-reminder",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "repeat-tool-reminder",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-schedule",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "schedule",
+    "inject": [
+      "agents",
+      "sessions",
+      "tools",
+      "sessionPersistence"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-scope",
+    "kind": "library",
+    "exports": [
+      "AnonymousEntries",
+      "NamedEntries",
+      "ScopedLayers",
+      "bindScopeParent",
+      "carrierKeyOf",
+      "createScope",
+      "isScopeCarrier",
+      "scopeChainOf"
+    ]
+  },
+  {
+    "name": "@deepseek-ai/dsh-session",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "SessionStore",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-session-checkpoint-policy",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "session-checkpoint-policy",
+    "inject": [
+      "llm",
+      "sessionPersistence",
+      "sessions",
+      "tools"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-session-log-export",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "session-log-download",
+    "inject": [
+      "commands"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-session-persistence",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "SessionPersistence",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-session-projection",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "SessionProjectionRegistry",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-session-projection-cache",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "SessionProjectionCache",
+    "inject": [
+      "storageDomain",
+      "sessionProjections",
+      "sessionPersistence",
+      "sessions"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-session-reference",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "SessionReferenceResolver",
+    "inject": [
+      "sessionQuery"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-session-stats",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "session-stats",
+    "inject": [
+      "sessionProjections"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-session-telemetry",
+    "kind": "library",
+    "exports": [
+      "SessionTelemetryBackend",
+      "SessionTelemetryCoordinator"
+    ]
+  },
+  {
+    "name": "@deepseek-ai/dsh-session-title",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "SessionTitleService",
+    "inject": [
+      "sessions"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-session-title-first-prompt-llm",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "session-title-first-prompt-llm",
+    "inject": [
+      "sessionTitle",
+      "llm",
+      "sessions"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-session-title-llm",
+    "kind": "library",
+    "exports": [
+      "SESSION_TITLE_TIMEOUT_CODE",
+      "SessionTitleLlmConfigFields",
+      "SessionTitleLlmConfigSchema",
+      "generateSessionTitleWithLlm",
+      "registerSessionTitleLlmProvider",
+      "resolveSessionTitleLlmConfig"
+    ]
+  },
+  {
+    "name": "@deepseek-ai/dsh-settings",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "SettingsProvider",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-shell",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "ShellExecutor",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-shell-env",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "shell-env",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-skill",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "SkillRegistry",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-spill",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "SpillStore",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-spill-policy",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "spill-policy",
+    "inject": [
+      "tools"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-storage",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "Storage",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-storage-domain",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "storage-domain",
+    "inject": [
+      "storage"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-subagent",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "SubagentRuntime",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-subagent-fork-in-process",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "subagent-fork-in-process",
+    "inject": [
+      "subagents"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-subagent-in-process-driver",
+    "kind": "library",
+    "exports": [
+      "STRUCTURED_OUTPUT_INSTRUCTION",
+      "STRUCTURED_OUTPUT_TOOL",
+      "startInProcessRun"
+    ]
+  },
+  {
+    "name": "@deepseek-ai/dsh-subagent-spawn-in-process",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "subagent-spawn-in-process",
+    "inject": [
+      "subagents"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-system-prompt",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "SystemPrompt",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-time-context",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "time-context",
+    "inject": [
+      "agents"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-timeout",
+    "kind": "library",
+    "exports": [
+      "MAX_TIMER_DELAY_MS",
+      "TimeoutReason",
+      "clampTimeout",
+      "deadline",
+      "idleWatchdog",
+      "timeoutOf"
+    ]
+  },
+  {
+    "name": "@deepseek-ai/dsh-tmux-context",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "tmux-context",
+    "inject": [
+      "agents"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-token-meter",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "TokenMeter",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-tool-ask-user",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "tool-ask-user",
+    "inject": [
+      "tools",
+      "userQuestions"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-tool-call-timeout-policy",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "timeout-policy",
+    "inject": [
+      "tools"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-tool-goal",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "tool-goal",
+    "inject": [
+      "agents",
+      "goals",
+      "tools",
+      "systemPrompt"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-tool-jobs",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "tool-jobs",
+    "inject": [
+      "tools",
+      "jobs",
+      "systemPrompt"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-tool-skill",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "tool-skill",
+    "inject": [
+      "agents",
+      "tools",
+      "skills"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-tool-subagent",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "tool-subagent",
+    "inject": [
+      "tools",
+      "subagents",
+      "systemPrompt"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-tool-subagent-control",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "tool-subagent-control",
+    "inject": [
+      "tools",
+      "subagents"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-tool-subagent-report",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "tool-subagent-report",
+    "inject": [
+      "subagents",
+      "tools",
+      "systemPrompt"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-tool-todo",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "tool-todo",
+    "inject": [
+      "tools"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-tool-web",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "tool-web",
+    "inject": [
+      "tools",
+      "web",
+      "systemPrompt"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-tools",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "ToolRuntime",
+    "inject": [
+      "systemPrompt"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-typert-protocol",
+    "kind": "library",
+    "exports": [
+      "Remote",
+      "RemoteScope",
+      "TypertLookupFailure",
+      "TypertRemoteService",
+      "bindTypertRemote",
+      "isTypertRemoteSegment",
+      "remoteMethods"
+    ]
+  },
+  {
+    "name": "@deepseek-ai/dsh-typert-registry",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "TypertRegistry",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-user-approval",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "ApprovalService",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-user-questions",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "UserQuestionService",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-web",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "WebRuntime",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-web-search-deepseek",
+    "kind": "object",
+    "from": "module",
+    "pluginName": "web-search-deepseek",
+    "inject": [
+      "web"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-workflow",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "WorkflowEngine",
+    "inject": [],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/dsh-workspace",
+    "kind": "class",
+    "from": "default",
+    "pluginName": "WorkspaceRegistry",
+    "inject": [
+      "storageDomain",
+      "sessionPersistence"
+    ],
+    "provide": []
+  },
+  {
+    "name": "@deepseek-ai/schemastery",
+    "kind": "function",
+    "from": "default",
+    "pluginName": "Schema",
+    "inject": [],
+    "provide": []
+  }
+]
