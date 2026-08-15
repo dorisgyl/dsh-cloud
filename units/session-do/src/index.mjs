@@ -14,6 +14,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { modules } from '../build/plugins.generated.js'
 import { assemble, servicesOn, unmetInjects } from '../../../packages/cf-boot/src/plugin-tree.mjs'
 import { StubLlmAdapter } from '../../../packages/cf-testing/src/stub-llm-adapter.mjs'
+import { WorkersAiAdapter, resolveModelId } from '../../../packages/cf-llm-transport/src/workers-ai.mjs'
 import cfStorageDo from '../../../packages/cf-storage-do/src/index.mjs'
 import { CfSessionPersistenceDo } from '../../../packages/cf-session-persistence-do/src/index.mjs'
 import { TurnQueue } from './turn-queue.mjs'
@@ -37,11 +38,19 @@ const SKIP = [
 // Config for plugins whose schema has required fields. cf-settings-do will
 // supply these from TenantDO once it exists.
 const CONFIG = {
+  // Overridden per agent by chooseProvider(); this is only the tree-level default.
   '@deepseek-ai/dsh-agent-default-model': { provider: 'stub', model: 'stub-1' },
   '@deepseek-ai/dsh-agent-instructions': { maxBytes: 65536 },
 }
 
-const AGENT_OPTIONS = { provider: 'stub', model: 'stub-1' }
+// ADR-12's zero-configuration default: with the AI binding present the agent
+// talks to a Cloudflare-hosted DeepSeek model and needs no key at all. Without
+// it — local dev, or a deployment that did not add the binding — the
+// deterministic stub keeps everything testable.
+function chooseProvider(env, modelOverride) {
+  if (!env?.AI) return { provider: 'stub', model: 'stub-1' }
+  return { provider: 'workers-ai', model: modelOverride || resolveModelId(env) }
+}
 
 export class SessionAgentDO extends DurableObject {
   constructor(state, env) {
@@ -49,8 +58,13 @@ export class SessionAgentDO extends DurableObject {
     this.state = state
     this.sql = state.storage.sql
     this.queue = new TurnQueue(this.sql)
+    this.env = env
+    // Set per request so a measurement can pin a model without a redeploy.
+    this.modelOverride = null
     this.tree = null
     this.adapter = null
+    this.stub = null
+    this.workersAi = null
     // One live agent per Durable Object instance. Hibernation clears this, so
     // the next turn resumes — which is exactly the intended boundary: resume on
     // a cold start or a wake, never between two turns of a warm object.
@@ -80,8 +94,15 @@ export class SessionAgentDO extends DurableObject {
     const domain = modules['@deepseek-ai/dsh-storage-domain']
     await ctx.plugin(domain.default ?? domain, { backend: 'do-sqlite' })
 
-    this.adapter = new StubLlmAdapter({ reply: 'Hello from a Durable Object.', chunkSize: 6 })
-    ctx.llm.registerAdapter(['stub'], this.adapter)
+    // Both routes are always registered; which one an agent uses is its
+    // `agentOptions.provider`, decided per request rather than at build time.
+    this.stub = new StubLlmAdapter({ reply: 'Hello from a Durable Object.', chunkSize: 6 })
+    ctx.llm.registerAdapter(['stub'], this.stub)
+    if (this.env?.AI) {
+      this.workersAi = new WorkersAiAdapter(this.env.AI)
+      ctx.llm.registerAdapter(['workers-ai'], this.workersAi)
+    }
+    this.adapter = this.workersAi ?? this.stub
 
     this.tree = { ctx, report, services: servicesOn(ctx), assembleMs: Date.now() - t0 }
     return this.tree
@@ -112,6 +133,12 @@ export class SessionAgentDO extends DurableObject {
       const turns = Number(url.searchParams.get('turns') ?? 50)
       const every = Number(url.searchParams.get('every') ?? 10)
       const fresh = url.searchParams.get('fresh') === '1'
+      const model = url.searchParams.get('model')
+      if (model && model !== this.modelOverride) {
+        // Changing model changes agentOptions, so the live agent is reopened.
+        this.modelOverride = model
+        await this.releaseAgent()
+      }
       return Response.json(await this.bench(turns, every, fresh))
     }
 
@@ -192,8 +219,8 @@ export class SessionAgentDO extends DurableObject {
     const persisted = this.maxSeq() !== null
     const tOpen = Date.now()
     this.agent = persisted
-      ? await ctx.agents.resume({ resumeSessionId: this.sessionId, agentOptions: AGENT_OPTIONS })
-      : await ctx.agents.create({ sessionId: this.sessionId, agentOptions: AGENT_OPTIONS })
+      ? await ctx.agents.resume({ resumeSessionId: this.sessionId, agentOptions: chooseProvider(this.env, this.modelOverride) })
+      : await ctx.agents.create({ sessionId: this.sessionId, agentOptions: chooseProvider(this.env, this.modelOverride) })
     return { agent: this.agent.agent, openedMs: Date.now() - tOpen }
   }
 

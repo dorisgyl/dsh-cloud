@@ -1,0 +1,9 @@
+{
+  "name": "cf-llm-transport",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "LLM egress adapters: Workers AI (zero-config default) and AI Gateway.",
+  "exports": { "./workers-ai": "./src/workers-ai.mjs" },
+  "dependencies": { "@deepseek-ai/dsh-llm": "0.1.0-rc.6" }
+}

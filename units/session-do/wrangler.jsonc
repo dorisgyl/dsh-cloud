@@ -15,6 +15,9 @@
       { "name": "SESSION", "class_name": "SessionAgentDO" }
     ]
   },
+  // ADR-12: the zero-configuration default. No key, no account beyond this one.
+  "ai": { "binding": "AI" },
+
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["SessionAgentDO"] }
   ]

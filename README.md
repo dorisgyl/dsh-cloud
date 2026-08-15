@@ -22,7 +22,7 @@ M1 is partly done. What runs today, verified in real workerd:
 | Session log persists to Durable Object SQLite | yes |
 | Turns survive the client disconnecting | yes — `scripts/m1-disconnect-demo.mjs` |
 | Edge with Cloudflare Access and per-user sharding | yes |
-| A real model | **not yet** — a deterministic stub adapter stands in |
+| A real model | yes — Workers AI, no API key |
 | Shell / files / terminal | **not yet** — that is M2 |
 | The dsh web UI | **not yet** — the edge serves a placeholder |
 
@@ -47,10 +47,11 @@ Only the minimal tier exists today.
 - **Node 22+, pnpm, wrangler**
 - **A Cloudflare account on the Workers Paid plan** (from $5/month)
 
-  The free plan gives each invocation **10 ms of CPU**. An agent turn's CPU cost
-  grows with the session log, so a free-plan deployment tends to work for the
-  first few turns and then fail permanently on one that has grown too long. That
-  failure mode is worse than the $5, so the paid plan is the documented floor.
+  The free plan gives each invocation **10 ms of CPU**. A measured agent turn
+  against a real model costs **~49 ms**, so a free-plan deployment cannot
+  complete even one turn. (A stub model fits in 4–8 ms, which is why the limit
+  is easy to miss until something real is wired up.) Cloudflare-hosted DeepSeek
+  models are paid-plan only as well.
 - A hostname you control. **Do not deploy on `*.workers.dev`** — it is blocked
   outright on some networks, and the failure is invisible from the browser.
 
@@ -115,7 +116,8 @@ rather than an afterthought.
 
 BYOK, in three steps of increasing effort:
 
-1. **Nothing** — Workers AI, no key at all (planned zero-config default)
+1. **Nothing** — Workers AI, no key at all. Cloudflare hosts DeepSeek's own
+   models, so the default needs no third-party account. Override with `AI_MODEL`
 2. **`wrangler secret put`** at deploy time — the normal path
 3. **In the UI**, stored encrypted per tenant — for teams and for switching often
 
