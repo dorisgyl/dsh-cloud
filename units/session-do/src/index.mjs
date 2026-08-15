@@ -15,6 +15,8 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { modules } from '../build/plugins.generated.js'
 import { assemble, servicesOn, unmetInjects } from '../../../packages/cf-boot/src/plugin-tree.mjs'
 import { StubLlmAdapter } from '../../../packages/cf-testing/src/stub-llm-adapter.mjs'
+import cfStorageDo from '../../../packages/cf-storage-do/src/index.mjs'
+import { CfSessionPersistenceDo } from '../../../packages/cf-session-persistence-do/src/index.mjs'
 
 // Plugin-shaped exports that are not plugins.
 const SKIP = [
@@ -23,6 +25,13 @@ const SKIP = [
   // Loader-side grouping plugin: expects to be instantiated by
   // cordis-plugin-loader, which a statically expanded tree does not use.
   '@deepseek-ai/cordis-plugin-group',
+  // Abstract seams: registering the base class publishes a non-functional
+  // service and then collides with the concrete backend that should own the
+  // name. Upstream loads the implementation, never the base.
+  '@deepseek-ai/dsh-session-persistence',
+  // The storage-domain plugin needs `{ backend }` config naming a live backend,
+  // so it is registered by hand after cf-storage-do rather than expanded blind.
+  '@deepseek-ai/dsh-storage-domain',
 ]
 
 // Config for plugins whose schema has required fields. cf-settings-do will
@@ -38,6 +47,15 @@ const TRACKED_EVENTS = [
   'user/message', 'assistant/chunk', 'assistant/message',
   'tool/call', 'tool/result',
 ]
+
+function hasPersistedLog(sql, sessionId) {
+  try {
+    const row = sql.exec('SELECT COUNT(*) AS n FROM session_event WHERE id = ?', sessionId).toArray()[0]
+    return (row?.n ?? 0) > 0
+  } catch {
+    return false   // tables not created yet: nothing persisted
+  }
+}
 
 export class SessionAgentDO extends DurableObject {
   constructor(state, env) {
@@ -58,6 +76,16 @@ export class SessionAgentDO extends DurableObject {
       skip: SKIP, config: CONFIG, settleMs: 1500,
     })
     const assembleMs = Date.now() - t0
+
+    // The two seams upstream leaves empty on workerd. Both need the Durable
+    // Object's SQLite handle, which only exists here, so they are registered
+    // after the tree rather than expanded into it at build time.
+    const sql = this.state.storage.sql
+    await ctx.plugin(cfStorageDo, { name: 'do-sqlite', sql })
+    await ctx.plugin(CfSessionPersistenceDo, { sql })
+    // storageDomain only publishes once a named backend service exists.
+    await ctx.plugin(modules['@deepseek-ai/dsh-storage-domain'].default
+      ?? modules['@deepseek-ai/dsh-storage-domain'], { backend: 'do-sqlite' })
 
     // Register the deterministic adapter on the 'stub' provider route.
     this.adapter = new StubLlmAdapter({ reply: 'Hello from a Durable Object.', chunkSize: 6 })
@@ -87,15 +115,25 @@ export class SessionAgentDO extends DurableObject {
 
     try {
       const sessionId = `m1-${this.state.id.toString().slice(0, 12)}`
-      // The field is `agentOptions`, not `options` — with the wrong name the
-      // turn still runs to completion and fails at the model call with
-      // "has no provider/model", which is only visible in the session log.
-      const handle = await ctx.agents.create({
-        sessionId,
-        agentOptions: { provider: 'stub', model: 'stub-1' },
-      })
+      const agentOptions = { provider: 'stub', model: 'stub-1' }
+
+      // create() vs resume() is not a convenience choice. Creating on an id that
+      // already has a persisted log is rejected outright —
+      //   'already has a persisted log on disk that does not match this live
+      //    session (id collision)'
+      // — and, like every turn failure, that only surfaces inside the log.
+      // A Durable Object woken from hibernation must therefore resume, never
+      // create, which is exactly what the alarm-driven turn loop will do.
+      //
+      // The field is `agentOptions`, not `options`; with the wrong key the turn
+      // runs to completion and fails at the model call instead.
+      const persisted = hasPersistedLog(this.state.storage.sql, sessionId)
+      trace.push(`session ${sessionId}: ${persisted ? 'resume' : 'create'}`)
+      const handle = persisted
+        ? await ctx.agents.resume({ resumeSessionId: sessionId, agentOptions })
+        : await ctx.agents.create({ sessionId, agentOptions })
       const agent = handle.agent
-      trace.push(`after create: status=${agent.status}`)
+      trace.push(`after open: status=${agent.status}`)
 
       // `whenIdle()` follows the driver that `followup()` wakes. `followup` sets
       // status to 'running' synchronously, so calling it straight afterwards is
@@ -143,6 +181,9 @@ export class SessionAgentDO extends DurableObject {
         modelCalls: this.adapter.calls - callsBefore,
       },
       events,
+      // Read straight out of SQLite: the in-memory session log proves the turn
+      // ran, only the tables prove it was persisted.
+      durable: this.durableSnapshot(),
       tree: {
         registered: report.registered.length,
         failed: report.failed,
@@ -150,6 +191,21 @@ export class SessionAgentDO extends DurableObject {
         services: services.length,
         unmetInjects: Object.fromEntries(unmetInjects(modules, services)),
       },
+    }
+  }
+
+  /** Whether this session already has durable events, i.e. resume rather than create. */
+/** What actually reached SQLite, read back through a separate query path. */
+  durableSnapshot() {
+    const sql = this.state.storage.sql
+    const one = (q, ...a) => { try { return sql.exec(q, ...a).toArray() } catch (e) { return [{ error: String(e.message) }] } }
+    return {
+      headers: one('SELECT id, materialized FROM session_header'),
+      eventCount: one('SELECT COUNT(*) AS n FROM session_event')[0],
+      byType: one('SELECT type, COUNT(*) AS n FROM session_event GROUP BY type ORDER BY n DESC'),
+      seqRange: one('SELECT MIN(seq) AS lo, MAX(seq) AS hi FROM session_event')[0],
+      kvUnits: one('SELECT unit, version FROM kv_unit'),
+      kvRecords: one('SELECT COUNT(*) AS n FROM kv_record')[0],
     }
   }
 
