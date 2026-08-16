@@ -363,6 +363,26 @@ export class SessionAgentDO extends DurableObject {
   async fetch(request) {
     const url = new URL(request.url)
 
+    // The browser's two downlinks, which are WebSockets and NOT the socket
+    // below.
+    //
+    // dsh-client-connection ships two client platforms over one set of paths:
+    // AbstractApiClient reads them as SSE (the CLI and automation entry, design
+    // 8.4), and WebApiClient -- "Browser platform subclass: unary/respond use
+    // fetch; mux/host use downlink-only WebSockets" -- opens them as sockets.
+    // Both notes this file has carried about the transport were half right.
+    //
+    // Left to fall through, these upgrades met the generic handler below and got
+    // this object's own `session/subscribed` protocol. The client parses every
+    // message through serverRequestSchema, so every one failed, the stream never
+    // yielded a frame, and the page stayed blank with no error anywhere. A
+    // socket that connects and speaks the wrong protocol is the exact failure a
+    // 501 here used to prevent.
+    if (request.headers.get('Upgrade') === 'websocket'
+      && (url.pathname === '/events.mux' || url.pathname === '/events.host')) {
+      return this.openEventSocket(url.pathname === '/events.mux' ? 'mux' : 'host')
+    }
+
     if (request.headers.get('Upgrade') === 'websocket') {
       const pair = new WebSocketPair()
       const [client, server] = Object.values(pair)
@@ -769,6 +789,80 @@ export class SessionAgentDO extends DurableObject {
         agentOptions: chooseProvider(this.env, this.modelOverride, this.providerOverride),
       })
     return { agent: this.agent.agent, openedMs: Date.now() - tOpen }
+  }
+
+  /**
+   * One browser downlink: the same frames the SSE path emits, over a socket.
+   *
+   * The frame envelope is upstream's `fullFrame` — the client parses each
+   * message with `serverRequestSchema` and then the payload with the mux or host
+   * frame schema, so the shape is not ours to choose.
+   *
+   * The socket is accepted directly rather than through `acceptWebSocket`: this
+   * one is pumped by a generator running in this object, so the object has to
+   * stay in memory for as long as the stream is open. Hibernation is for sockets
+   * that only react to inbound messages, and nothing is ever sent up this one.
+   */
+  async openEventSocket(kind) {
+    await this.ensureTree()
+    if (!this.api) {
+      return Response.json({
+        error: 'api-proxy-unavailable',
+        hint: 'the client protocol service did not load; check /state',
+      }, { status: 503 })
+    }
+
+    const pair = new WebSocketPair()
+    const [client, server] = Object.values(pair)
+    server.accept()
+
+    const abort = new AbortController()
+    server.addEventListener('close', () => abort.abort())
+    server.addEventListener('error', () => abort.abort())
+
+    const rpcId = crypto.randomUUID()
+    const frames = kind === 'mux'
+      ? this.api.events.mux({ rpcId, payload: {} }, abort.signal)
+      : this.api.events.host({ rpcId, payload: {} }, abort.signal)
+
+    // The stream yields NARROW envelopes -- `{rpcId, payload}`, one rpcId per
+    // frame, not the stream's. Sending the narrow object as the payload and the
+    // stream's rpcId produced 43 well-formed-looking frames with `method`
+    // undefined, which serverRequestSchema rejects one by one: a socket that
+    // streams perfectly and renders nothing.
+    const send = (narrow) => {
+      try {
+        server.send(JSON.stringify({
+          type: 'server-request',
+          rpcId: narrow.rpcId,
+          method: narrow.payload.type,
+          payload: narrow.payload,
+        }))
+      } catch { /* the client went away */ }
+    }
+
+    // Not awaited: the 101 has to go back now, and the pump outlives it.
+    ;(async () => {
+      try {
+        for await (const narrow of frames) send(narrow)
+      } catch (error) {
+        // One stream/error frame, then close — the client has a schema for this
+        // and will show it, which beats a socket that simply stops.
+        if (!abort.signal.aborted) {
+          send({
+            rpcId,
+            payload: {
+              type: 'stream/error',
+              error: { code: 'internal', message: String(error?.message ?? error), details: {} },
+            },
+          })
+        }
+      } finally {
+        try { server.close(1000, 'stream ended') } catch { /* already closed */ }
+      }
+    })()
+
+    return new Response(null, { status: 101, webSocket: client })
   }
 
   /**
