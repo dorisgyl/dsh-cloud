@@ -94,6 +94,24 @@ const ALIASES = {
     export function anonymousUserId() { return 'cf-tenant-user' }
     export default { getOrCreateAnonymousUserId, readAnonymousUserId, anonymousUserId }
   `,
+
+  // dsh-host-apiproxy statically imports this, and it imports node:child_process
+  // to hand a path to the desktop's file manager. There is no desktop here.
+  //
+  // The dead code path is already configured off -- ApiProxyService takes
+  // `nativeOpen`, and U2 sets it false, so `canOpenPath()` reports false and the
+  // client never offers "reveal in folder". But configuration does not remove a
+  // static import, and one unreachable import is enough to fail the bundle gate.
+  //
+  // Throwing rather than resolving: if something ever does reach this, a clear
+  // error naming the reason beats a silent no-op that looks like the file
+  // manager simply did not open.
+  '@deepseek-ai/dsh-native-command': `
+    export function runNativeCommand() {
+      throw new Error('cf: native commands are not available in a Worker (there is no desktop to open a path on)')
+    }
+    export default { runNativeCommand }
+  `,
 }
 const aliasPlugin = {
   name: 'upstream-alias',

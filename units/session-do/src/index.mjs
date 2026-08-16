@@ -11,6 +11,7 @@
 import { DurableObject } from 'cloudflare:workers'
 import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { toFetchHandler } from '@deepseek-ai/dsh-host-apiproxy'
 import { modules } from '../build/plugins.generated.js'
 import { assemble, servicesOn, unmetInjects } from '../../../packages/cf-boot/src/plugin-tree.mjs'
 import { StubLlmAdapter } from '../../../packages/cf-testing/src/stub-llm-adapter.mjs'
@@ -23,6 +24,8 @@ import { CfShellExecutor } from '../../../packages/cf-exec-provider/src/shell.mj
 import { CfFileSystem } from '../../../packages/cf-exec-provider/src/fs.mjs'
 import { CfSubprocessService } from '../../../packages/cf-exec-provider/src/subprocess.mjs'
 import { CfCredentialsDo } from '../../../packages/cf-credentials-do/src/index.mjs'
+import { CfSessionQueryDo } from '../../../packages/cf-session-query-do/src/index.mjs'
+import { CfWorkspacePicker } from '../../../packages/cf-workspace-picker/src/index.mjs'
 import { TurnQueue } from './turn-queue.mjs'
 
 // Plugin-shaped exports that are not plugins, plus the seams registered by hand.
@@ -59,9 +62,21 @@ const SKIP = [
   // exist; the symptom was "credentials.resolve is not a function" from a
   // web-search tool, three layers away from the cause.
   '@deepseek-ai/dsh-credentials',
+  // Eight and nine, both required by dsh-host-apiproxy rather than wanted for
+  // their own sake: the client protocol injects `sessionQuery` and
+  // `directoryPicker`, so neither could stay absent once the UI transport came
+  // in. cf-session-query-do and cf-workspace-picker are the providers.
+  '@deepseek-ai/dsh-session-query',
+  '@deepseek-ai/dsh-host-directory-picker',
   // Needs `{ backend }` config naming a live backend, so it is registered after
   // cf-storage-do rather than expanded blind.
   '@deepseek-ai/dsh-storage-domain',
+  // Not a seam: registered by hand only so that a failure while loading it is
+  // reported. assemble() awaits each fiber for a bounded window, and this
+  // plugin waits on storageDomain, which is registered afterwards -- so it
+  // always loads outside that window, and an exception there was landing
+  // nowhere at all.
+  '@deepseek-ai/dsh-workspace',
   // A deliberate choice between two packages that register the SAME tool name.
   //
   // dsh-tool-bash and dsh-tool-bash-persistent both register `bash`, so exactly
@@ -102,6 +117,10 @@ const CONFIG = {
   // has no path back into the account. Claiming `read-only` would advertise a
   // confinement nothing implements, which is worse than naming the real one.
   '@deepseek-ai/dsh-sandbox-policy': { mode: 'danger-full-access', workspaceRoot: '/workspace' },
+  // The client protocol. `nativeOpen: false` is the truth here -- there is no
+  // desktop to reveal a path on -- and it is also why dsh-native-command can be
+  // aliased away at build time without removing a reachable feature.
+  '@deepseek-ai/dsh-host-apiproxy': { nativeOpen: false },
   // Required config, not optional knobs: the service throws
   // "session-title: configuration is required" without all three, which is why
   // `sessionTitle` never published and looked like a mystery.
@@ -123,6 +142,22 @@ function chooseProvider(env, modelOverride, providerOverride) {
   // binding being absent.
   if (providerOverride === 'stub' || !env?.AI) return { provider: 'stub', model: 'stub-1' }
   return { provider: 'workers-ai', model: modelOverride || resolveModelId(env) }
+}
+
+/**
+ * Wait, bounded, until every named service exists.
+ *
+ * Not a fixed sleep: it returns the moment the cascade settles, and it returns
+ * anyway when it does not — a missing service is then reported by the tree's
+ * own `unmet` rather than hidden behind a hang.
+ */
+async function settleFor(ctx, names, timeoutMs) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (names.every((name) => ctx.get(name) !== undefined)) return true
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+  return false
 }
 
 export class SessionAgentDO extends DurableObject {
@@ -169,6 +204,10 @@ export class SessionAgentDO extends DurableObject {
     await ctx.plugin(CfSessionPersistenceDo, { sql: this.sql })
     await ctx.plugin(CfSettingsDo, { sql: this.sql })
     await ctx.plugin(CfCredentialsDo, { env: this.env, sql: this.sql })
+    // Search over this object's own log. Required by the client protocol, so it
+    // could no longer be deferred; see the class for why it searches for real
+    // rather than answering with an empty page.
+    await ctx.plugin(CfSessionQueryDo, { sql: this.sql, sessionId: this.sessionId })
 
     // ADR-06: the tier is decided by which bindings exist, not by which code
     // was compiled. No EXEC binding means the minimal tier — the shell seam
@@ -194,10 +233,29 @@ export class SessionAgentDO extends DurableObject {
         exec: this.env.EXEC,
         sandboxId: this.sessionId,
       })
+      // A directory picker onto the execution world. Without an EXEC binding
+      // there is no filesystem to browse, so the minimal tier registers none and
+      // the client protocol will report the picker as unavailable rather than
+      // offer one that answers nothing.
+      await ctx.plugin(CfWorkspacePicker, {
+        exec: this.env.EXEC,
+        sandboxId: this.sessionId,
+      })
     }
     // storageDomain publishes only once a named backend service exists.
     const domain = modules['@deepseek-ai/dsh-storage-domain']
     await ctx.plugin(domain.default ?? domain, { backend: 'do-sqlite' })
+
+    // dsh-workspace publishes `workspaceRegistry`, which dsh-host-apiproxy --
+    // the whole client protocol -- injects. Awaited here so a failure is an
+    // error with a message rather than a service that silently never appears.
+    this.lateErrors = []
+    const workspace = modules['@deepseek-ai/dsh-workspace']
+    try {
+      await ctx.plugin(workspace.default ?? workspace)
+    } catch (error) {
+      this.lateErrors.push({ specifier: 'dsh-workspace', error: String(error?.message ?? error) })
+    }
 
     // Both routes are always registered; which one an agent uses is its
     // `agentOptions.provider`, decided per request rather than at build time.
@@ -230,6 +288,16 @@ export class SessionAgentDO extends DurableObject {
     if (ctx.terminals && !ctx.pty) {
       ctx.effect(() => ctx.provide('pty', ctx.terminals))
     }
+
+    // Let the cascade finish before calling the tree assembled.
+    //
+    // The seams registered by hand above arrive AFTER assemble()'s settle
+    // window, and plugins waiting on them then load in turn: storageDomain
+    // releases dsh-workspace, which publishes `workspaceRegistry`, which
+    // releases dsh-host-apiproxy. Snapshotting the service list immediately
+    // reported `workspaceRegistry` as unmet and left ctx.apiProxy undefined --
+    // a tree that was fine and had simply not finished.
+    await settleFor(ctx, ['workspaceRegistry', 'apiProxy'], 3000)
 
     this.tree = { ctx, report, services: servicesOn(ctx), assembleMs: Date.now() - t0 }
     return this.tree
@@ -349,6 +417,12 @@ export class SessionAgentDO extends DurableObject {
     }
 
     if (url.pathname === '/state') {
+      // Build the tree before reporting on it. A cold object has none, so this
+      // route used to answer `tree: null` on a cold read and describe whatever
+      // an earlier deployment had built on a warm one -- which is how a stale
+      // service list got read as evidence about new code twice in a row. A
+      // diagnostic that only works on a warm object is not a diagnostic.
+      if (url.searchParams.get('tree') !== '0') await this.ensureTree()
       return Response.json(await this.snapshot())
     }
 
@@ -391,6 +465,37 @@ export class SessionAgentDO extends DurableObject {
     if (prompt) {
       await this.submit(prompt)
       return Response.json({ queued: true, ...(await this.snapshot()) })
+    }
+
+    // The dsh web UI's own protocol, served by upstream's implementation of it.
+    //
+    // `dsh-host-apiproxy` was excluded from this build for most of the project
+    // under a rule meant for the local host packages, and design 5.4 had it
+    // marked "referenced" all along. It turns out to be the entire client
+    // protocol behind `toFetchHandler(api)`: a Request in, a Response out, no
+    // node:http and no webserver service. The two event streams are GET + SSE
+    // over a ReadableStream, not WebSockets as an earlier note here recorded,
+    // and everything else is POST /api/<method> with a JSON envelope.
+    //
+    // This runs LAST so the diagnostic routes above keep their names; the
+    // protocol's own methods are POSTs and do not collide with them.
+    //
+    // U1 strips `/api` before forwarding, and the handler matches on the full
+    // client paths, so the prefix goes back on here rather than U1 learning
+    // which of its paths are protocol and which are ours.
+    if (url.pathname !== '/') {
+      const { ctx } = await this.ensureTree()
+      if (!ctx.apiProxy) {
+        return Response.json({
+          error: 'api-proxy-unavailable',
+          hint: 'the client protocol service did not load; check /state for pending plugins and unmet injects',
+        }, { status: 503 })
+      }
+      const forwarded = new Request(
+        new URL(`/api${url.pathname}${url.search}`, url.origin),
+        request,
+      )
+      return toFetchHandler(ctx.apiProxy).fetch(forwarded)
     }
 
     return Response.json(await this.snapshot())
@@ -750,6 +855,10 @@ export class SessionAgentDO extends DurableObject {
             // service, so both `failed` and a service count look perfectly fine
             // while a tool the user asked for simply does not exist.
             pending: this.tree.report.pending.map((x) => x.replace('@deepseek-ai/', '')),
+            // Failures from plugins registered after assemble()'s settle window.
+            // Nothing was collecting these, so they simply did not exist as far
+            // as any report was concerned.
+            lateErrors: this.lateErrors ?? [],
             // The end of the chain, and the only thing the model can actually
             // see. Everything above is plumbing; this is the outcome.
             // `schemas()` is what the model is actually offered -- the same

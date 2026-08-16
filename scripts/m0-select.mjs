@@ -10,11 +10,24 @@ const short = (n) => n.replace('@deepseek-ai/', '')
 // section of the design doc, or an M0 measurement.
 const EXCLUDE = [
   [/^dsh-client/, 'frontend package; ships in U1 browser bundle'],
-  [/^dsh-host-/, 'design 5.4: host transport surface is ours (webserver/frontend-static/directory-picker/apiproxy/plugin-inventory)'],
+  // `^dsh-host-` was too broad in exactly the way `^dsh-sandbox` was. Design 5.4
+  // marks `host/apiproxy` as **referenced**, not rewritten -- and it turns out to
+  // be the whole client protocol (5648 lines) behind a `toFetchHandler(api)` that
+  // takes a Request and returns a Response. It touches no node:http and no
+  // webserver service. Excluding it meant planning to rewrite the one host
+  // package that was already the right shape for a Worker.
+  //
+  // dsh-host-directory-picker is the `directoryPicker` seam apiproxy injects; its
+  // three local providers (-native/-browse/-auto) stay out.
+  [/^dsh-host-webserver$|^dsh-host-frontend-static$|^dsh-host-plugin-inventory$|^dsh-host-directory-picker-/, 'design 5.4: host transport surface is ours (webserver/frontend-static/plugin-inventory/local pickers)'],
   [/^dsh$|^dsh-cmdline$|^dsh-app-boot$/, 'design 5.5: CLI and boot, replaced by cf-boot'],
   [/^dsh-cordis-host-runner$/, 'design 5.5: node:vm plugin host; workerd ships vm as a non-functional stub'],
   [/^dsh-workflow-worker-thread$|^dsh-code-runtime/, 'vm + worker_threads'],
-  [/^dsh-session-query/, 'design 5.3: cross-session search is out of scope; the sqlite variant also pulls node:sqlite'],
+  // The `sessionQuery` SEAM is now in: dsh-host-apiproxy injects it, so the
+  // client protocol does not load without it. Only the sqlite provider stays
+  // out (node:sqlite is a non-functional stub on workerd); cf-session-query-do
+  // searches the Durable Object's own log instead.
+  [/^dsh-session-query-/, 'design 5.3: the sqlite provider pulls node:sqlite; the seam itself is required by host-apiproxy'],
   // The execution world's PROVIDERS are ours (cf-exec-provider over U5), but
   // the seams and the tools that use them are upstream's and must be installed.
   // `^dsh-sandbox` used to be the pattern here and it was too broad: it caught

@@ -151,6 +151,26 @@ export class CfSessionPersistenceDo extends SessionPersistence {
   append(id, events) { return this.coordinator.append(id, events) }
   load(id) { return this.coordinator.load(id) }
   prepare(id, signal) { return this.coordinator.prepare(id, signal) }
+
+  // The read half of the seam. These were missing for as long as nothing called
+  // them, and the first caller was three layers away: dsh-workspace asks for
+  // `list()` to enumerate sessions, dsh-host-apiproxy waits on dsh-workspace,
+  // and the visible symptom was the entire web UI protocol never loading.
+  //
+  // An abstract member with no implementation is not inert. It is a failure
+  // scheduled for whenever someone first needs it, and the report it produces
+  // names the wrong layer.
+  inspect(id, signal) { return this.coordinator.inspect(id, signal) }
+  readFrom(id, fromSeq, signal) { return this.coordinator.readFrom(id, fromSeq, signal) }
+  list() { return this.backend.list() }
+
+  /**
+   * No snapshots. Sessions are rows in this object's SQLite, and the Durable
+   * Object's own storage is what makes them durable — there is no separate
+   * snapshot artifact to enumerate, so the honest answer is an empty list
+   * rather than an unimplemented method.
+   */
+  async listSnapshots() { return [] }
 }
 
 export default CfSessionPersistenceDo
