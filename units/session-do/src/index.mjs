@@ -193,6 +193,14 @@ export class SessionAgentDO extends DurableObject {
       const turns = Number(url.searchParams.get('turns') ?? 50)
       const every = Number(url.searchParams.get('every') ?? 10)
       const fresh = url.searchParams.get('fresh') === '1'
+      // The AI binding cannot be called from `wrangler dev` in single-config
+      // mode ("Binding AI needs to be run remotely"), so local runs need a way
+      // to ask for the deterministic adapter explicitly.
+      const provider = url.searchParams.get('provider')
+      if (provider && provider !== this.providerOverride) {
+        this.providerOverride = provider
+        await this.releaseAgent()
+      }
       const model = url.searchParams.get('model')
       if (model && model !== this.modelOverride) {
         // Changing model changes agentOptions, so the live agent is reopened.
