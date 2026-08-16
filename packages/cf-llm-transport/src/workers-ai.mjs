@@ -137,6 +137,19 @@ export class WorkersAiAdapter extends LlmAdapter {
       name: model.replace(/^@cf\//, ''),
       context: { contextWindow: 128000 },
       defaultMaxTokens: 2048,
+      // Text only, said explicitly.
+      //
+      // The seam reads an ABSENT list as "unknown" and a present-but-omitting
+      // list as a negative capability, so leaving it out is not the same as
+      // saying no — it is saying nothing. The difference is visible in the web
+      // UI: with the list absent, dragging an image in fails somewhere in the
+      // send path; with it present, the composer can say "the current model
+      // does not support images" before the user tries.
+      //
+      // Cloudflare's catalogue lists @cf/deepseek-ai/deepseek-v4-flash-0731 as
+      // Text Generation, with no vision capability. When a multimodal model is
+      // bound here, this is the one line that has to change with it.
+      inputModalities: ['text'],
     }
   }
 
