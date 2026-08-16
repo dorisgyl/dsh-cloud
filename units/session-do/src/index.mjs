@@ -146,6 +146,19 @@ const CONFIG = {
   // desktop to reveal a path on -- and it is also why dsh-native-command can be
   // aliased away at build time without removing a reachable feature.
   '@deepseek-ai/dsh-host-apiproxy': { nativeOpen: false },
+  // Which subagent provider the `subagent` tool delegates through.
+  //
+  // `provider` is a required field and nothing supplied it, so the tool loaded
+  // without registering anything: no failure, no pending fiber, no unmet
+  // inject, and an agent that reports it "has no tool for creating subagents".
+  // The plugin was there the whole time, mounted against a provider it was
+  // never told to use.
+  //
+  // `spawn` over `fork`: dsh-subagent-spawn-in-process constructs the child, so
+  // it is the one that can enforce a depth limit, a tool filter and a persona.
+  // maxDepth is set BECAUSE it can enforce it -- the plugin refuses the
+  // combination otherwise rather than accepting a cap it cannot apply.
+  '@deepseek-ai/dsh-tool-subagent': { provider: 'spawn', maxDepth: 2 },
   // Required config, not optional knobs: the service throws
   // "session-title: configuration is required" without all three, which is why
   // `sessionTitle` never published and looked like a mystery.
