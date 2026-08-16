@@ -75,6 +75,7 @@
     "@deepseek-ai/dsh-tool-ask-user": "0.1.0-rc.6",
     "@deepseek-ai/dsh-tool-bash": "0.1.0-rc.6",
     "@deepseek-ai/dsh-tool-call-timeout-policy": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-tool-fs": "0.1.0-rc.6",
     "@deepseek-ai/dsh-tool-goal": "0.1.0-rc.6",
     "@deepseek-ai/dsh-tool-jobs": "0.1.0-rc.6",
     "@deepseek-ai/dsh-tool-skill": "0.1.0-rc.6",

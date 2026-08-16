@@ -35,7 +35,8 @@ const EXCLUDE = [
   // bash-persistent needs background processes, which cf-exec-provider does not
   // implement yet, so it stays out rather than failing at the first long command.
   [/^dsh-tool-bash-persistent$|^dsh-tool-pwsh|^dsh-tool-ralph|^dsh-tool-cordis|^dsh-tool-workflow/, 'needs background processes or an OS shell we do not provide'],
-  [/^dsh-tool-fs$|^dsh-tool-fs-search$|^dsh-tool-str-replace-editor$/, 'needs the fs provider, which is the next step after shell'],
+  // dsh-tool-fs is installed: cf-exec-provider/fs now fills the `fs` seam.
+  [/^dsh-tool-fs-search$|^dsh-tool-str-replace-editor$/, 'not published upstream at this version'],
   [/^dsh-persona$/, 'not installed yet; M1 uses the default'],
 
   // --- The following were discovered by M0 measurement; the design doc's

@@ -20,6 +20,7 @@ import cfStorageDo from '../../../packages/cf-storage-do/src/index.mjs'
 import { CfSessionPersistenceDo } from '../../../packages/cf-session-persistence-do/src/index.mjs'
 import { CfSettingsDo } from '../../../packages/cf-settings-do/src/index.mjs'
 import { CfShellExecutor } from '../../../packages/cf-exec-provider/src/shell.mjs'
+import { CfFileSystem } from '../../../packages/cf-exec-provider/src/fs.mjs'
 import { CfCredentialsDo } from '../../../packages/cf-credentials-do/src/index.mjs'
 import { TurnQueue } from './turn-queue.mjs'
 
@@ -46,6 +47,9 @@ const SKIP = [
   // of surprises: an abstract seam publishes a service that refuses to work,
   // and the concrete provider must be the only thing registered under its name.
   '@deepseek-ai/dsh-shell',
+  // Six. dsh-fs is the abstract filesystem seam; cf-exec-provider/fs is the
+  // implementation. Nothing new to learn here, which is the point of a rule.
+  '@deepseek-ai/dsh-fs',
   // Five now. dsh-credentials publishes a service whose resolve() does not
   // exist; the symptom was "credentials.resolve is not a function" from a
   // web-search tool, three layers away from the cause.
@@ -138,6 +142,13 @@ export class SessionAgentDO extends DurableObject {
         exec: this.env.EXEC,
         // One sandbox per session for now. A workspace outliving its session
         // (design 6.3) is the next step, and changes only this id.
+        sandboxId: this.sessionId,
+      })
+      // Same binding, same sandbox: the shell and the filesystem must see one
+      // execution world, or a file written by bash would be invisible to the
+      // read tool.
+      await ctx.plugin(CfFileSystem, {
+        exec: this.env.EXEC,
         sandboxId: this.sessionId,
       })
     }
