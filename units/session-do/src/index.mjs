@@ -737,6 +737,23 @@ export class SessionAgentDO extends DurableObject {
         return this.createSession(request)
       }
 
+      // The SECOND rpc surface, which this object did not serve at all.
+      //
+      // dsh-client-connection speaks two: dsh-host-apiproxy's 52 methods at
+      // `/api/<name>` with a dot in the name, and Typert RPC at
+      // `/api/<namespace>/<method>` with a slash. The client uses both, so
+      // serving only the first meant `/api/commands/list` answered 404 and the
+      // composer's slash commands never loaded -- along with everything else
+      // behind a Remote service.
+      //
+      // `dispatchRpc` already returns the `result` half of the envelope, so
+      // this only has to carry the rpcId back. One `/` versus one `.` is what
+      // separates the two namespaces, and nothing in either uses both.
+      const segments = url.pathname.split('/').filter(Boolean)
+      if (request.method === 'POST' && segments.length === 2) {
+        return this.dispatchTypert(request, `${segments[0]}/${segments[1]}`)
+      }
+
       const forwarded = new Request(
         new URL(`/api${url.pathname}${url.search}`, url.origin),
         request,
@@ -952,6 +969,45 @@ export class SessionAgentDO extends DurableObject {
     })()
 
     return new Response(null, { status: 101, webSocket: client })
+  }
+
+  /**
+   * One Typert RPC call: `/api/<namespace>/<method>`.
+   *
+   * The gateway validates the endpoint, the arguments and the result against
+   * the generated descriptors, and returns the `{ok, value} | {ok, error}` half
+   * of the envelope itself — so this adds the rpcId and nothing else. A failure
+   * that reaches here rather than the gateway is a transport-level one, and is
+   * reported as such rather than as a business error.
+   */
+  async dispatchTypert(request, endpoint) {
+    let body
+    try {
+      body = await request.json()
+    } catch {
+      return new Response('body is not JSON', { status: 400 })
+    }
+    const rpcId = body?.rpcId ?? endpoint
+
+    const { ctx } = await this.ensureTree()
+    if (!ctx.typertGateway) {
+      return Response.json({
+        type: 'server-response',
+        rpcId,
+        result: { ok: false, error: { code: 'service-unavailable', message: 'the Typert gateway did not load', details: { endpoint } } },
+      })
+    }
+
+    try {
+      const result = await ctx.typertGateway.dispatchRpc(endpoint, body?.payload, request.signal)
+      return Response.json({ type: 'server-response', rpcId, result })
+    } catch (error) {
+      return Response.json({
+        type: 'server-response',
+        rpcId,
+        result: { ok: false, error: { code: 'internal', message: String(error?.message ?? error), details: { endpoint } } },
+      })
+    }
   }
 
   /**
