@@ -18,6 +18,7 @@ import { WorkersAiAdapter, resolveModelId } from '../../../packages/cf-llm-trans
 import { withCoalescing } from '../../../packages/cf-llm-transport/src/coalesce.mjs'
 import cfStorageDo from '../../../packages/cf-storage-do/src/index.mjs'
 import { CfSessionPersistenceDo } from '../../../packages/cf-session-persistence-do/src/index.mjs'
+import { CfSettingsDo } from '../../../packages/cf-settings-do/src/index.mjs'
 import { TurnQueue } from './turn-queue.mjs'
 
 // Plugin-shaped exports that are not plugins, plus the seams registered by hand.
@@ -31,6 +32,13 @@ const SKIP = [
   // that then collides with the concrete backend. Upstream loads the
   // implementation, never the base.
   '@deepseek-ai/dsh-session-persistence',
+  // Same shape: dsh-jobs refuses to start unless a concrete registry is loaded,
+  // and dsh-jobs-local is that registry. "local" is in-process, not on-disk.
+  '@deepseek-ai/dsh-jobs',
+  // Same again: dsh-settings is the abstract seam and cf-settings-do is the
+  // implementation. Registering the base publishes a service whose load()
+  // does not exist.
+  '@deepseek-ai/dsh-settings',
   // Needs `{ backend }` config naming a live backend, so it is registered after
   // cf-storage-do rather than expanded blind.
   '@deepseek-ai/dsh-storage-domain',
@@ -42,6 +50,14 @@ const CONFIG = {
   // Overridden per agent by chooseProvider(); this is only the tree-level default.
   '@deepseek-ai/dsh-agent-default-model': { provider: 'stub', model: 'stub-1' },
   '@deepseek-ai/dsh-agent-instructions': { maxBytes: 65536 },
+  // Required config, not optional knobs: the service throws
+  // "session-title: configuration is required" without all three, which is why
+  // `sessionTitle` never published and looked like a mystery.
+  '@deepseek-ai/dsh-session-title': {
+    fallbackMaxWords: 8,
+    fallbackMaxBytes: 128,
+    maxTitleBytes: 256,
+  },
 }
 
 // ADR-12's zero-configuration default: with the AI binding present the agent
@@ -99,6 +115,7 @@ export class SessionAgentDO extends DurableObject {
     // Object's SQLite handle, which only exists here.
     await ctx.plugin(cfStorageDo, { name: 'do-sqlite', sql: this.sql })
     await ctx.plugin(CfSessionPersistenceDo, { sql: this.sql })
+    await ctx.plugin(CfSettingsDo, { sql: this.sql })
     // storageDomain publishes only once a named backend service exists.
     const domain = modules['@deepseek-ai/dsh-storage-domain']
     await ctx.plugin(domain.default ?? domain, { backend: 'do-sqlite' })

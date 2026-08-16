@@ -1,0 +1,9 @@
+{
+  "name": "cf-settings-do",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Upstream settings provider over Durable Object SQLite.",
+  "exports": { ".": "./src/index.mjs" },
+  "dependencies": { "@deepseek-ai/dsh-settings": "0.1.0-rc.6" }
+}

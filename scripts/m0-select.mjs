@@ -16,7 +16,12 @@ const EXCLUDE = [
   [/^dsh-workflow-worker-thread$|^dsh-code-runtime/, 'vm + worker_threads'],
   [/^dsh-session-query/, 'design 5.3: cross-session search is out of scope; the sqlite variant also pulls node:sqlite'],
   [/bash|pwsh|terminal|subprocess|sandbox|^dsh-fs-local|^dsh-fs-sandbox|landlock|native-command/, 'design 5.2: execution world; not installed in the minimal tier'],
-  [/^dsh-storage-json$|^dsh-settings-file$|^dsh-credentials-local$|^dsh-spill-local$|^dsh-attachment-local$|^dsh-session-persistence-jsonl$|^dsh-jobs-local$/, 'design 5.3/5.5: local providers replaced by cf-* (the seams are still referenced)'],
+  [/^dsh-storage-json$|^dsh-settings-file$|^dsh-credentials-local$|^dsh-spill-local$|^dsh-attachment-local$|^dsh-session-persistence-jsonl$/, 'design 5.3/5.5: local providers replaced by cf-* (the seams are still referenced)'],
+  // dsh-jobs-local is NOT excluded: the M0 scan puts it among the 122 packages
+  // with zero Node builtins, and dsh-jobs is an abstract seam that refuses to
+  // start without an implementation. "local" here means in-process, not on-disk.
+  [/^dsh-agent-presets$/, 'needs the `loader` service (cordis-plugin-loader), which a statically expanded tree does not use. Nothing injects what it provides'],
+  [/^dsh-session-reference$/, 'needs `sessionQuery`, which is out of scope (design 5.3). Nothing injects what it provides'],
   [/hmr/, 'hot reload; not needed in production'],
   [/^dsh-typert-loader$/, 'resolves typert contracts from disk at runtime; we reference them statically'],
   [/^dsh-home-paths$|^dsh-atomic-write$|^dsh-anonymous-user-id$|^dsh-launch-environment$/, 'host-machine paths and identity; no cloud equivalent'],
