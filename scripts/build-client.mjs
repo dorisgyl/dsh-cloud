@@ -52,6 +52,28 @@ const EXCLUDE = new Map([
   ['@deepseek-ai/dsh-client-modules', 'the loader itself, already inside the shell bundle'],
   ['@deepseek-ai/dsh-client-web', 'the shell; it is the page, not an entry in its own graph'],
   ['@deepseek-ai/dsh-client-web-react', 'shell internals, bundled with the shell'],
+
+  // Design 8.2 item 1, and it turns out to be a roster line rather than a patch.
+  //
+  // The two directory pickers both register the single slot
+  // "conversation.hero.workspace.directoryFlow", so installing both is a boot
+  // failure, not a preference: "already has a registration at priority 0".
+  // Upstream expects the deployment to install exactly one.
+  //
+  // `browse` is the one that matches this deployment: cf-workspace-picker
+  // serves the seam's `browse` capability over the container's filesystem, and
+  // `native` would call host.pickDirectory, which correctly answers
+  // directory-picker-unavailable because there is no desktop to open a dialog
+  // on.
+  ['@deepseek-ai/dsh-client-ui-directory-picker-native', 'design 8.2 item 1: both pickers claim one single slot; this deployment serves the `browse` capability'],
+
+  // ADR-09: no Worker extensions, so there is no plugin plane to manage. These
+  // two are that plane's UI and its transport — they call
+  // `dynamicCordisRunner/syncInspectManifest` and `dynamicCordisRunner/inventory`,
+  // which this host does not serve and answered 404 twice on every load.
+  // Shipping a panel whose every call fails is worse than not shipping it.
+  ['@deepseek-ai/dsh-client-ui-cordis', 'ADR-09: the plugin plane is not implemented; its calls 404'],
+  ['@deepseek-ai/dsh-cordis-client-runner', 'ADR-09: transport for the plugin plane above'],
 ])
 
 // The roster is defined by the DECLARATION, not by the package name.
