@@ -967,22 +967,69 @@ export class SessionAgentDO extends DurableObject {
     }
 
     const sessionId = payload.sessionId ?? `session-${crypto.randomUUID()}`
+    const { ctx } = await this.ensureTree()
+
+    // The workspace the caller chose, and the two things that follow from it.
+    //
+    // The first version of this method dropped both: it ignored `workspaceId`
+    // and `cwd` and hardcoded /workspace, so a session created for a chosen
+    // folder pointed somewhere else and was never attached to the workspace at
+    // all. The UI then had a session with no workspace, kept the composer
+    // gated, and reopened the picker on every click — a loop with no error in
+    // it anywhere.
+    //
+    // Reimplementing one method means owning all of its inputs, not the ones
+    // that were convenient.
+    let workspace
+    if (payload.workspaceId !== undefined) {
+      workspace = ctx.workspaceRegistry?.get?.(payload.workspaceId)
+      if (workspace === undefined) {
+        return reply({
+          ok: false,
+          error: {
+            code: 'workspace-not-found',
+            message: `workspace "${payload.workspaceId}" not found`,
+            details: { workspaceId: payload.workspaceId },
+          },
+        })
+      }
+    }
+    const cwd = workspace?.path ?? payload.cwd ?? WORKSPACE_ROOT
+
     try {
-      const { ctx } = await this.ensureTree()
       if (ctx.sessions.get(sessionId) === undefined) {
         await ctx.agents.create({
           sessionId,
-          meta: { cwd: WORKSPACE_ROOT },
+          meta: { cwd },
           agentOptions: chooseProvider(this.env, this.modelOverride, this.providerOverride),
         })
       }
-      return reply({ ok: true, value: { sessionId } })
     } catch (error) {
       return reply({
         ok: false,
         error: { code: 'internal', message: `failed to create session "${sessionId}": ${String(error?.message ?? error)}`, details: {} },
       })
     }
+
+    if (workspace !== undefined) {
+      try {
+        await workspace.attachSession(sessionId)
+      } catch (error) {
+        // Reported separately from creation, as upstream does: the session
+        // exists, and saying so is what lets the client recover rather than
+        // create a second one.
+        return reply({
+          ok: false,
+          error: {
+            code: 'workspace-attach-failed',
+            message: `session "${sessionId}" was created but could not attach to workspace "${workspace.id}": ${String(error?.message ?? error)}`,
+            details: { sessionId, workspaceId: workspace.id },
+          },
+        })
+      }
+    }
+
+    return reply({ ok: true, value: { sessionId } })
   }
 
   /** Drop the live agent so the next turn opens a clean one. */
