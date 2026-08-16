@@ -134,6 +134,45 @@ const aliasPlugin = {
 const NEVER_ABORTED = '({ aborted: false, reason: undefined, onabort: null, ' +
   'addEventListener() {}, removeEventListener() {}, dispatchEvent() { return false }, throwIfAborted() {} })'
 const rewrites = []
+
+// dsh-workspace resolves and validates every workspace path against the host
+// filesystem — one `realpath()` and four `stat(...).isDirectory()` calls. On
+// workerd that filesystem holds only /bundle, /tmp and /dev, while the workspace
+// lives in a container reached over a service binding, so workspace.create fails
+// with "no such file or directory" about a path that exists perfectly well.
+//
+// An earlier attempt rewrote realpath to pure normalisation and was taken back
+// out: it made the first call pass and the next fail, and making them all pass
+// would mean blinding the validation so that any string became a valid
+// workspace. That was the right thing to reject and the wrong conclusion to
+// stop at — the host cannot SEE the container's filesystem, but it can ASK it.
+//
+// So these two functions are redirected, for this package only, to a bridge the
+// Durable Object installs over the fs seam. The checks still happen; they happen
+// in the filesystem the workspace is actually on.
+const WORKSPACE_FS_SHIM = `
+  // Installed by SessionAgentDO before dsh-workspace loads.
+  const bridge = () => {
+    const fs = globalThis.__DSH_WORKSPACE_FS__
+    if (!fs) throw new Error('workspace: no execution world is bound, so no path can be validated')
+    return fs
+  }
+  export const realpath = (path) => bridge().realpath(String(path))
+  export const stat = (path) => bridge().stat(String(path))
+  export default { realpath, stat }
+`
+const workspaceFs = {
+  name: 'workspace-fs-over-the-exec-seam',
+  setup(build) {
+    build.onResolve({ filter: /^node:fs\/promises$/ }, (args) => {
+      if (!/dsh-workspace[/\\]lib[/\\]/.test(args.importer)) return null
+      return { path: 'workspace-fs', namespace: 'workspace-fs' }
+    })
+    build.onLoad({ filter: /.*/, namespace: 'workspace-fs' }, () => ({
+      contents: WORKSPACE_FS_SHIM, loader: 'js',
+    }))
+  },
+}
 // A rewrite that was tried here and taken back out, because it was half a fix.
 //
 // dsh-workspace resolves and validates every workspace path against the HOST
@@ -177,7 +216,7 @@ const result = await esbuild.build({
   platform: 'browser',
   conditions: ['workerd', 'worker', 'browser', 'import', 'module', 'default'],
   external: ['node:*', 'cloudflare:*'],
-  plugins: [stubPlugin, requireShim, aliasPlugin, lazySignal],
+  plugins: [stubPlugin, requireShim, aliasPlugin, workspaceFs, lazySignal],
   outfile: './units/session-do/build/u2.bundle.js',
   metafile: true,
   logLevel: 'silent',

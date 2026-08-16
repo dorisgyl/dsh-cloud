@@ -157,20 +157,33 @@ Search now also covers every session in the Durable Object, not the one it was
 constructed for. That was right when an object held one session and wrong the
 moment the UI could create more.
 
-### Workspaces are left failing, on purpose
+### Workspaces: the host was asking the wrong filesystem
 
-`dsh-workspace` validates every path with one `realpath()` and four
-`stat(...).isDirectory()` calls against the **host** filesystem, which cannot
-see the container the workspace is in. `workspace.create` therefore reports "no
-such file or directory" about a path that exists perfectly well.
+`dsh-workspace` resolves and validates every path with one `realpath()` and four
+`stat(...).isDirectory()` calls against the **host** filesystem. On workerd that
+holds only `/bundle`, `/tmp` and `/dev`, so `workspace.create` reported "no such
+file or directory" about `/workspace/dsh-demo` — a path that exists perfectly
+well, in the container.
 
-Rewriting `realpath` to pure normalisation was tried and taken back out: it made
-the first call pass and the next fail with a more confusing message. Making them
-all pass means blinding the validation entirely, so that any string becomes a
-valid workspace — which is the failure mode this whole project has spent its
-time on. The honest error stays, and design 6.3's per-tenant registry is where
-it gets solved, doing its checks through the fs seam as `cf-workspace-picker`
-already does.
+The first attempt rewrote `realpath` to pure normalisation and was taken back
+out: it made the first call pass and the next fail, and making them all pass
+would have meant blinding the validation so any string became a valid workspace.
+Rejecting that was right; **stopping there was not**. The host cannot *see* the
+container's filesystem, but it can *ask* it.
+
+So `node:fs/promises` is replaced at build time — for that one package — with a
+shim that calls a bridge the Durable Object installs over the fs seam. The
+checks still happen; they happen where the workspace actually is:
+
+```
+host.createDirectory /workspace/dsh-demo    ok
+workspace.create     /workspace/dsh-demo    ok, workspaceId be7688bb…
+workspace.create     /workspace/never-made  workspace-invalid-path  ← still refused
+workspace.list                              lists dsh-demo
+```
+
+The last line is the one that matters: a path that exists nowhere is still
+rejected, so nothing was traded away to make the first line work.
 
 ## Not done
 

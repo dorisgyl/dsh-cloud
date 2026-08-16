@@ -272,6 +272,15 @@ export class SessionAgentDO extends DurableObject {
     const domain = modules['@deepseek-ai/dsh-storage-domain']
     await ctx.plugin(domain.default ?? domain, { backend: 'do-sqlite' })
 
+    // The filesystem dsh-workspace validates against, redirected to the one the
+    // workspace is actually on. Its node:fs/promises import is replaced at build
+    // time (scripts/m0-bundle.mjs) with a shim that calls this bridge, so path
+    // checks still happen -- they just happen in the container.
+    //
+    // Installed before the plugin loads, because the registry validates during
+    // its own construction.
+    globalThis.__DSH_WORKSPACE_FS__ = this.env?.EXEC ? this.workspaceFsBridge() : undefined
+
     // dsh-workspace publishes `workspaceRegistry`, which dsh-host-apiproxy --
     // the whole client protocol -- injects. Awaited here so a failure is an
     // error with a message rather than a service that silently never appears.
@@ -789,6 +798,49 @@ export class SessionAgentDO extends DurableObject {
         agentOptions: chooseProvider(this.env, this.modelOverride, this.providerOverride),
       })
     return { agent: this.agent.agent, openedMs: Date.now() - tOpen }
+  }
+
+  /**
+   * `realpath` and `stat` for dsh-workspace, answered by the execution world.
+   *
+   * Only these two, and only the parts the registry uses: a resolved path and
+   * "is this a directory". Errors keep node's `code` so upstream's own ENOENT
+   * handling still recognises them.
+   */
+  workspaceFsBridge() {
+    const call = async (payload) => {
+      const response = await this.env.EXEC.fetch('http://exec/fs', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sandboxId: this.sessionId, cwd: WORKSPACE_ROOT, payload }),
+      })
+      const body = await response.json()
+      if (!body?.ok) throw new Error(String(body?.error ?? 'the execution world did not answer'))
+      return body.result
+    }
+
+    const notFound = (path, op) => {
+      const error = new Error(`no such file or directory, ${op} '${path}'`)
+      error.code = 'ENOENT'
+      return error
+    }
+
+    return {
+      realpath: async (path) => {
+        const result = await call({ op: 'realpath', path })
+        if (result?.error) throw notFound(path, 'readlink')
+        return result.path
+      },
+      stat: async (path) => {
+        const { info } = await call({ op: 'stat', path })
+        if (!info) throw notFound(path, 'stat')
+        return {
+          isDirectory: () => info.type === 'directory',
+          isFile: () => info.type === 'file',
+          size: info.size ?? 0,
+        }
+      },
+    }
   }
 
   /**
