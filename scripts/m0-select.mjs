@@ -17,7 +17,12 @@ const EXCLUDE = [
   [/^dsh-session-query/, 'design 5.3: cross-session search is out of scope; the sqlite variant also pulls node:sqlite'],
   // The execution world's PROVIDERS are ours (cf-exec-provider over U5), but
   // the seams and the tools that use them are upstream's and must be installed.
-  [/^dsh-bash-local$|^dsh-bash-sandbox$|^dsh-pwsh|^dsh-fs-local$|^dsh-fs-sandbox$|^dsh-sandbox|^dsh-subprocess-local$|landlock|native-command|^dsh-terminal/, 'design 5.2: local/OS-bound execution providers, replaced by cf-exec-provider'],
+  // `^dsh-sandbox` used to be the pattern here and it was too broad: it caught
+  // dsh-sandbox-policy, which is pure policy arithmetic (which mode, which
+  // workspace root) with no OS enforcement in it at all. dsh-terminal-bash
+  // injects `sandboxPolicy`, so the over-broad rule would have made the whole
+  // terminal stack unloadable for a reason that was never about the terminal.
+  [/^dsh-bash-local$|^dsh-bash-sandbox$|^dsh-pwsh|^dsh-fs-local$|^dsh-fs-sandbox$|^dsh-sandbox-local$|^dsh-sandbox-windows-acl$|^dsh-sandbox$|^dsh-subprocess-local$|landlock|native-command|^dsh-terminal-local$/, 'design 5.2: local/OS-bound execution providers, replaced by cf-exec-provider'],
   [/^dsh-storage-json$|^dsh-settings-file$|^dsh-credentials-local$|^dsh-spill-local$|^dsh-attachment-local$|^dsh-session-persistence-jsonl$/, 'design 5.3/5.5: local providers replaced by cf-* (the seams are still referenced)'],
   // dsh-jobs-local is NOT excluded: the M0 scan puts it among the 122 packages
   // with zero Node builtins, and dsh-jobs is an abstract seam that refuses to
@@ -34,7 +39,9 @@ const EXCLUDE = [
   // dsh-tool-bash is installed: it is the standard tier's reason to exist.
   // bash-persistent needs background processes, which cf-exec-provider does not
   // implement yet, so it stays out rather than failing at the first long command.
-  [/^dsh-tool-bash-persistent$|^dsh-tool-pwsh|^dsh-tool-ralph|^dsh-tool-cordis|^dsh-tool-workflow/, 'needs background processes or an OS shell we do not provide'],
+  // dsh-tool-bash-persistent is installed: cf-exec-provider/subprocess fills the
+  // `subprocess` seam, which is what dsh-terminal-bash needs to give it a PTY.
+  [/^dsh-tool-pwsh|^dsh-tool-ralph|^dsh-tool-cordis|^dsh-tool-workflow/, 'needs an OS shell or a plugin host we do not provide'],
   // dsh-tool-fs is installed: cf-exec-provider/fs now fills the `fs` seam.
   [/^dsh-tool-fs-search$|^dsh-tool-str-replace-editor$/, 'not published upstream at this version'],
   [/^dsh-persona$/, 'not installed yet; M1 uses the default'],

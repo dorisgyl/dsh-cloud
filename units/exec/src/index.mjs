@@ -119,6 +119,29 @@ export default {
       return Response.json({ ok: true, unit: 'dsh-exec', ops: Object.keys(handlers) })
     }
 
+    // A real pseudo-terminal, upgraded straight through to the container.
+    //
+    // This is the one route that is not request/response: the SDK hands back a
+    // 101 carrying the socket, and U2 holds the other end for the life of the
+    // terminal session. Everything else here is deliberately coarse and
+    // one-shot, but a terminal is a stream by nature and framing it as
+    // request/response would be the wrong shape, not a cheaper one.
+    if (url.pathname === '/terminal') {
+      if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket') {
+        return Response.json({ error: 'expected-websocket-upgrade' }, { status: 426 })
+      }
+      try {
+        const sandbox = sandboxFor(env, url.searchParams.get('sandboxId'))
+        return await sandbox.terminal(request, {
+          cols: Number(url.searchParams.get('cols')) || 80,
+          rows: Number(url.searchParams.get('rows')) || 24,
+          shell: url.searchParams.get('shell') || undefined,
+        })
+      } catch (error) {
+        return Response.json({ error: String(error?.message ?? error) }, { status: 500 })
+      }
+    }
+
     const op = url.pathname.replace(/^\//, '')
     const handler = handlers[op]
     if (!handler) return Response.json({ error: 'unknown-op', op }, { status: 404 })

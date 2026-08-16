@@ -21,6 +21,7 @@ import { CfSessionPersistenceDo } from '../../../packages/cf-session-persistence
 import { CfSettingsDo } from '../../../packages/cf-settings-do/src/index.mjs'
 import { CfShellExecutor } from '../../../packages/cf-exec-provider/src/shell.mjs'
 import { CfFileSystem } from '../../../packages/cf-exec-provider/src/fs.mjs'
+import { CfSubprocessService } from '../../../packages/cf-exec-provider/src/subprocess.mjs'
 import { CfCredentialsDo } from '../../../packages/cf-credentials-do/src/index.mjs'
 import { TurnQueue } from './turn-queue.mjs'
 
@@ -50,6 +51,10 @@ const SKIP = [
   // Six. dsh-fs is the abstract filesystem seam; cf-exec-provider/fs is the
   // implementation. Nothing new to learn here, which is the point of a rule.
   '@deepseek-ai/dsh-fs',
+  // Seven, and the one that pays best: filling `subprocess` is what lets
+  // dsh-terminal-bash run, which brings terminal emulation and idle inference
+  // we would otherwise have had to write.
+  '@deepseek-ai/dsh-subprocess',
   // Five now. dsh-credentials publishes a service whose resolve() does not
   // exist; the symptom was "credentials.resolve is not a function" from a
   // web-search tool, three layers away from the cause.
@@ -57,6 +62,28 @@ const SKIP = [
   // Needs `{ backend }` config naming a live backend, so it is registered after
   // cf-storage-do rather than expanded blind.
   '@deepseek-ai/dsh-storage-domain',
+  // A deliberate choice between two packages that register the SAME tool name.
+  //
+  // dsh-tool-bash and dsh-tool-bash-persistent both register `bash`, so exactly
+  // one can win and upstream expects the deployment to pick. Leaving both in
+  // means the winner is decided by registration order, which is not a decision.
+  //
+  // The persistent one works: its PTY survives across turns (measured -- `cd
+  // /tmp && export MARKER=...` in one turn, `/tmp` and `MARKER=persisted` read
+  // back in the next). It is not the default anyway, for one measured reason:
+  //
+  //   the container gives the shell no controlling terminal ("bash: cannot set
+  //   terminal process group ... no job control in this shell"), so Ctrl-C
+  //   reaches the tty and is echoed but does NOT kill the foreground command.
+  //   A `sleep 20` interrupted at 3s never yielded its prompt back, and every
+  //   later terminal in the same sandbox inherited the wedged shell, because a
+  //   sandbox has one PTY session.
+  //
+  // `bash` is the agent's most important tool and it has to recover on its own.
+  // The one-shot executor always does: every command carries a deadline and a
+  // failed command is an ordinary tool result. Swap these two lines to switch,
+  // and see docs/M2-terminal.md.
+  '@deepseek-ai/dsh-tool-bash-persistent',
 ]
 
 // Config for plugins whose schema has required fields. cf-settings-do will
@@ -65,6 +92,16 @@ const CONFIG = {
   // Overridden per agent by chooseProvider(); this is only the tree-level default.
   '@deepseek-ai/dsh-agent-default-model': { provider: 'stub', model: 'stub-1' },
   '@deepseek-ai/dsh-agent-instructions': { maxBytes: 65536 },
+  // The confinement model, stated once for the deployment.
+  //
+  // `danger-full-access` is the honest answer here, not a shortcut. The other
+  // two modes make dsh-terminal-bash call `ctx.sandbox.confine()` to wrap the
+  // shell in an OS-level jail (landlock, seatbelt) -- and there is no such jail
+  // to apply INSIDE the container, nor anything narrower worth enforcing there.
+  // The container is the boundary: it is disposable, holds no credentials, and
+  // has no path back into the account. Claiming `read-only` would advertise a
+  // confinement nothing implements, which is worse than naming the real one.
+  '@deepseek-ai/dsh-sandbox-policy': { mode: 'danger-full-access', workspaceRoot: '/workspace' },
   // Required config, not optional knobs: the service throws
   // "session-title: configuration is required" without all three, which is why
   // `sessionTitle` never published and looked like a mystery.
@@ -151,6 +188,12 @@ export class SessionAgentDO extends DurableObject {
         exec: this.env.EXEC,
         sandboxId: this.sessionId,
       })
+      // The PTY seam. dsh-terminal-bash waits on `subprocess`, so registering
+      // this is what makes the whole terminal stack come alive.
+      await ctx.plugin(CfSubprocessService, {
+        exec: this.env.EXEC,
+        sandboxId: this.sessionId,
+      })
     }
     // storageDomain publishes only once a named backend service exists.
     const domain = modules['@deepseek-ai/dsh-storage-domain']
@@ -173,6 +216,20 @@ export class SessionAgentDO extends DurableObject {
     // event) on every append — the log-entry names like `turn/start` are not
     // Cordis events, which is what an earlier note here got wrong.
     ctx.on('session/event', (_session, event) => this.pushEvent(event))
+
+    // Upstream renamed this service `pty` -> `terminals` between
+    // dsh-tool-bash-persistent@0.0.1-rc.1 and dsh-terminal@0.0.1-rc.3, and the
+    // tool was never republished: it still injects `pty` and calls
+    // ctx.pty.{spawn,startSend,read,kill,list}, which is exactly the surface
+    // TerminalSessionService exposes.
+    //
+    // Left alone the tool waits forever on a service nobody provides and simply
+    // never registers, with nothing anywhere reporting a problem. One alias in
+    // our own tree fixes it without touching upstream source (ADR-04), and it
+    // disappears the day the tool is republished.
+    if (ctx.terminals && !ctx.pty) {
+      ctx.effect(() => ctx.provide('pty', ctx.terminals))
+    }
 
     this.tree = { ctx, report, services: servicesOn(ctx), assembleMs: Date.now() - t0 }
     return this.tree
@@ -204,6 +261,62 @@ export class SessionAgentDO extends DurableObject {
 
     // Talk to U5 directly, bypassing the agent loop, so a container problem can
     // be told apart from a tool-calling problem.
+    // Direct evidence for the PTY path. The agent-level symptom is always the
+    // same sentence ("did not reach readiness"), which says a marker never
+    // arrived but nothing about what did -- so this dumps the raw bytes the
+    // pseudo-terminal actually produced.
+    if (url.pathname === '/pty-probe') {
+      if (!this.env?.EXEC) return Response.json({ error: 'no EXEC binding' }, { status: 503 })
+      const { ctx } = await this.ensureTree()
+      const waitMs = Number(url.searchParams.get('waitMs') ?? 6000)
+      const chunks = []
+      const control = []
+      try {
+        const handle = await ctx.subprocess.spawnTerminal({
+          launcher: url.searchParams.get('launcher') !== '0',
+          argv: ['/bin/bash', '--noprofile', '--norc', '-i'],
+          cwd: '/workspace',
+          rows: 40,
+          cols: 160,
+          graceMs: 3000,
+          env: {
+            TERM: 'dumb',
+            PAGER: 'cat',
+            PS1: 'dsh> ',
+            // Backslash-zero-three-three as LITERAL characters: printf is what
+            // interprets them, so this must not be a JS escape.
+            PROMPT_COMMAND: 'printf "\\033]133;D;%s\\007" "$?"',
+            DSH_SHELL: '1',
+          },
+        })
+        handle.output.on('data', (c) => chunks.push(c))
+        handle.onControlSeen = (m) => control.push(m)
+        control.push({ type: 'ready-consumed-during-spawn' })
+        if (url.searchParams.get('send')) await handle.write(`${url.searchParams.get('send')}\n`)
+        // Interrupt path. Without a controlling terminal the tty line discipline
+        // may never turn Ctrl-C into a signal, and a persistent shell that
+        // cannot be interrupted is a shell one bad command wedges for good.
+        const interruptAfterMs = Number(url.searchParams.get('interruptAfterMs') ?? 0)
+        if (interruptAfterMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, interruptAfterMs))
+          control.push({ type: 'sent-SIGINT', delivered: await handle.signalForeground('SIGINT') })
+        }
+        await new Promise((resolve) => setTimeout(resolve, waitMs))
+        const bytes = Buffer.concat(chunks.map((c) => Buffer.from(c)))
+        await handle.terminate()
+        return Response.json({
+          ok: true,
+          byteCount: bytes.length,
+          frames: handle.frames,
+          text: bytes.toString('utf8').slice(0, 4000),
+          escaped: JSON.stringify(bytes.toString('utf8').slice(0, 1200)),
+          control,
+        })
+      } catch (error) {
+        return Response.json({ ok: false, error: String(error?.message ?? error), stack: String(error?.stack ?? '').slice(0, 800) })
+      }
+    }
+
     if (url.pathname === '/exec-selftest') {
       if (!this.env?.EXEC) return Response.json({ error: 'no EXEC binding' }, { status: 503 })
       const op = url.searchParams.get('op') ?? 'exec'
@@ -628,8 +741,24 @@ export class SessionAgentDO extends DurableObject {
       tree: this.tree
         ? {
             services: this.tree.services.length,
+            serviceNames: this.tree.services,
             failed: this.tree.report.failed.map((f) => f.specifier.replace('@deepseek-ai/', '')),
-            unmet: Object.keys(unmetInjects(modules, this.tree.services)),
+            unmet: unmetInjects(modules, this.tree.services).map(([service, wanters]) => ({ service, wanters })),
+            // Registered but never settled: its `inject` list is still unmet, so
+            // Cordis is holding it dormant. This is the signal that was missing
+            // twice over -- a dormant plugin has no failure and publishes no
+            // service, so both `failed` and a service count look perfectly fine
+            // while a tool the user asked for simply does not exist.
+            pending: this.tree.report.pending.map((x) => x.replace('@deepseek-ai/', '')),
+            // The end of the chain, and the only thing the model can actually
+            // see. Everything above is plumbing; this is the outcome.
+            // `schemas()` is what the model is actually offered -- the same
+            // list the adapter turns into function tools. Enumerating the
+            // service object's own properties (an earlier attempt here) returns
+            // its internals and looks like an answer.
+            tools: (() => {
+              try { return this.tree.ctx.tools.schemas().map((t) => t.name).sort() } catch { return null }
+            })(),
           }
         : null,
     }

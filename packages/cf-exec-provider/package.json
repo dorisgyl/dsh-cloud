@@ -6,10 +6,12 @@
   "description": "Upstream shell and filesystem seams over a Cloudflare container.",
   "exports": {
     "./shell": "./src/shell.mjs",
-    "./fs": "./src/fs.mjs"
+    "./fs": "./src/fs.mjs",
+    "./subprocess": "./src/subprocess.mjs"
   },
   "dependencies": {
     "@deepseek-ai/dsh-shell": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-fs": "0.1.0-rc.6"
+    "@deepseek-ai/dsh-fs": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-subprocess": "0.0.1-rc.1"
   }
 }
