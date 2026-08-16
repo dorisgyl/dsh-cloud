@@ -109,7 +109,7 @@ injects the graph as `window.__DSH_BOOT__`.
 | Event downlinks | ours | WebSockets for the browser, SSE for non-browser clients — upstream ships both client platforms over the same paths |
 | Web server / static file host | ours | Workers Static Assets; `node:http` has no equivalent |
 | Directory picker | ours | `cf-workspace-picker` serves the `browse` capability over the container; `native` needs a desktop |
-| Plugin management panel | no | ADR-09: no Worker extensions, so there is no plugin plane to manage |
+| Plugin management panel | partial | the `loader` service and `pluginInventory` are live and served; the list is empty until the tree is composed THROUGH the loader (see below) |
 | Agent presets | no | `dsh-agent-presets` needs the file loader; `session.create` refuses a preset rather than ignoring it |
 | Attachments | ours | `cf-attachments-do` stores images beside the log — **never executed**, because the bound model takes no images |
 
@@ -132,6 +132,40 @@ turn, slash commands, `/export`, `ask_user_question`, subagents.
 | Per-user isolation | ours | one Durable Object and one container per Access user, named from verified claims |
 | R2 cold storage for old events | no | ADR-06 plans it; only the hot tier exists |
 | Tenant-level settings object | no | design's U3 is not built |
+
+## Runtime composition, and what is still missing from it
+
+"Everything is a plugin" is the upstream core, and it survives here intact: ~90
+plugins in the agent Worker, 34 in the browser, every tool and every seam a
+plugin row, and not one line of upstream source patched. What did NOT survive
+the port was the half where a deployment can **compose** plugins rather than
+only run them — `dsh-agent-presets` and the plugin panel both inject `loader`,
+and design 10.6 replaced the loader with a compile-time expansion.
+
+`cf-loader` puts the service back. `cordis-plugin-loader` turns out to be 744
+lines importing one Node builtin, and its only impossible step is the last one:
+
+```js
+if (this.ctx.loader.internal) return this.ctx.loader.internal.import(name, base, {})
+else return await import(name)          // impossible on workerd
+```
+
+`internal` is an overridable field, so pointing it at the statically expanded
+module map makes every plugin row resolve from what is already compiled in —
+**runtime composition without runtime code**.
+
+What that buys today: `loader` is live, `dsh-host-plugin-inventory` loads, and
+`pluginInventory/list` answers instead of 404.
+
+What it does not buy yet: **the answer is `{entries: []}`**. `loader.entries()`
+yields rows the LOADER created, and `cf-boot` still assembles the tree with
+direct `ctx.plugin()` calls that bypass it. Making the panel show anything means
+composing through the loader — a change to `assemble()`, not to the loader.
+
+The honest description of the ceiling, once that is done: **choose from the
+plugins this deployment was built with.** Installing arbitrary third-party code
+is a different problem needing a Dynamic Worker and its own security model, and
+ADR-09's stated reason for skipping it — that no primitive existed — has expired.
 
 ## Ten seams
 

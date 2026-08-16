@@ -1,0 +1,13 @@
+{
+  "name": "cf-loader",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Upstream's plugin loader, resolving specifiers against the statically expanded bundle.",
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis-plugin-loader": "1.0.2-rc.4"
+  }
+}

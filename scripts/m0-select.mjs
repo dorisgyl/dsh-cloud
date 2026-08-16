@@ -19,7 +19,9 @@ const EXCLUDE = [
   //
   // dsh-host-directory-picker is the `directoryPicker` seam apiproxy injects; its
   // three local providers (-native/-browse/-auto) stay out.
-  [/^dsh-host-webserver$|^dsh-host-frontend-static$|^dsh-host-plugin-inventory$|^dsh-host-directory-picker-/, 'design 5.4: host transport surface is ours (webserver/frontend-static/plugin-inventory/local pickers)'],
+  // dsh-host-plugin-inventory is IN now that `loader` exists: 118 lines, zero
+  // Node builtins, and it is what the settings panel's plugin section calls.
+  [/^dsh-host-webserver$|^dsh-host-frontend-static$|^dsh-host-directory-picker-/, 'design 5.4: host transport surface is ours (webserver/frontend-static/local pickers)'],
   [/^dsh$|^dsh-cmdline$|^dsh-app-boot$/, 'design 5.5: CLI and boot, replaced by cf-boot'],
   [/^dsh-cordis-host-runner$/, 'design 5.5: node:vm plugin host; workerd ships vm as a non-functional stub'],
   [/^dsh-workflow-worker-thread$|^dsh-code-runtime/, 'vm + worker_threads'],
@@ -46,7 +48,12 @@ const EXCLUDE = [
   [/^dsh-typert-loader$/, 'resolves typert contracts from disk at runtime; we reference them statically'],
   [/^dsh-home-paths$|^dsh-atomic-write$|^dsh-anonymous-user-id$|^dsh-launch-environment$/, 'host-machine paths and identity; no cloud equivalent'],
   [/^dsh-skill-filesystem$|^dsh-skill-badge$/, 'skills read from disk; not in the minimal tier'],
-  [/^cordis-plugin-include$|^cordis-plugin-loader$/, 'resolve the plugin tree from files; design 10.6 makes it static'],
+  // cordis-plugin-loader is IN: 744 lines, one Node builtin, and it is the seam
+  // that dsh-agent-presets and the plugin inventory hang off. cf-loader points
+  // its `internal.import` at the statically expanded map, so plugin rows
+  // resolve from the bundle instead of from disk -- runtime composition
+  // without runtime code.
+  [/^cordis-plugin-include$/, 'reads composition documents from disk; the roster is expanded at build time instead'],
   [/^dsh-web-app$|^dsh-web-frontend$/, 'design 5.4: frontend hosting; U1 uses Workers Static Assets'],
   [/^dsh-headless$/, 'local headless mode'],
   // dsh-tool-bash is installed: it is the standard tier's reason to exist.

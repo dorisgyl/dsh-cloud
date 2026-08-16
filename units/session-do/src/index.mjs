@@ -27,6 +27,7 @@ import { CfCredentialsDo } from '../../../packages/cf-credentials-do/src/index.m
 import { CfSessionQueryDo } from '../../../packages/cf-session-query-do/src/index.mjs'
 import { CfWorkspacePicker } from '../../../packages/cf-workspace-picker/src/index.mjs'
 import { CfAttachmentsDo } from '../../../packages/cf-attachments-do/src/index.mjs'
+import cfLoader from '../../../packages/cf-loader/src/index.mjs'
 import { TurnQueue } from './turn-queue.mjs'
 
 // Plugin-shaped exports that are not plugins, plus the seams registered by hand.
@@ -79,6 +80,10 @@ const SKIP = [
   // Needs `{ backend }` config naming a live backend, so it is registered after
   // cf-storage-do rather than expanded blind.
   '@deepseek-ai/dsh-storage-domain',
+  // The Loader is a class that provides itself, not a plugin function, and it
+  // needs its `internal` pointed at the bundle before anything resolves through
+  // it. cf-loader constructs it.
+  '@deepseek-ai/cordis-plugin-loader',
   // Not a seam: registered by hand only so that a failure while loading it is
   // reported. assemble() awaits each fiber for a bounded window, and this
   // plugin waits on storageDomain, which is registered afterwards -- so it
@@ -269,6 +274,9 @@ export class SessionAgentDO extends DurableObject {
     // Search over this object's own log. Required by the client protocol, so it
     // could no longer be deferred; see the class for why it searches for real
     // rather than answering with an empty page.
+    // Runtime composition over the bundled set. Registered early, because the
+    // plugins that inject `loader` are already waiting for it.
+    await ctx.plugin(cfLoader, { modules })
     await ctx.plugin(CfSessionQueryDo, { sql: this.sql, sessionId: this.sessionId })
     await ctx.plugin(CfAttachmentsDo, { sql: this.sql })
 
