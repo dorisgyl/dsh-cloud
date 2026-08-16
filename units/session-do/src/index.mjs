@@ -997,11 +997,26 @@ export class SessionAgentDO extends DurableObject {
     const cwd = workspace?.path ?? payload.cwd ?? WORKSPACE_ROOT
 
     try {
-      if (ctx.sessions.get(sessionId) === undefined) {
+      const existing = ctx.sessions.get(sessionId)
+      if (existing === undefined) {
         await ctx.agents.create({
           sessionId,
           meta: { cwd },
           agentOptions: chooseProvider(this.env, this.modelOverride, this.providerOverride),
+        })
+      } else if (existing.header?.cwd !== undefined && existing.header.cwd !== cwd) {
+        // Upstream raises SessionCwdConflict here and this used to skip the
+        // check entirely: an existing session was left at its old cwd and then
+        // attached to a workspace whose path did not match it. That is not a
+        // half-success, it is a session and a workspace disagreeing about where
+        // the work happens, which nothing downstream can reconcile.
+        return reply({
+          ok: false,
+          error: {
+            code: 'session-conflict',
+            message: `session "${sessionId}" already runs in "${existing.header.cwd}" and cannot be moved to "${cwd}"`,
+            details: { sessionId, requestedCwd: cwd, existingCwd: existing.header.cwd },
+          },
         })
       }
     } catch (error) {
