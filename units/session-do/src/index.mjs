@@ -610,7 +610,14 @@ export class SessionAgentDO extends DurableObject {
       if (!this.env?.EXEC) return Response.json({ error: 'no EXEC binding' }, { status: 503 })
       const op = url.searchParams.get('op') ?? 'exec'
       const payload = {
-        sandboxId: url.searchParams.get('sandbox') ?? this.sessionId,
+        // `sandboxId`, not `sessionId`. A bulk rename matched the exact string
+        // `sandboxId: this.sessionId` and skipped this line because of the `??`
+        // in front of it, so this probe spent a while inspecting a container
+        // the agent does not use -- removing a directory that was never there
+        // and reporting a filesystem nobody was working in. A diagnostic
+        // pointed at the wrong target describes a world that is not the one
+        // under test.
+        sandboxId: url.searchParams.get('sandbox') ?? this.sandboxId,
         command: url.searchParams.get('cmd') ?? 'echo selftest',
         path: url.searchParams.get('path') ?? '/workspace',
         content: 'selftest',
@@ -864,6 +871,12 @@ export class SessionAgentDO extends DurableObject {
           size: info.size ?? 0,
         }
       },
+      // Not part of what dsh-workspace imports; used by session.create to put
+      // the working directory back after a container has been recycled.
+      mkdir: async (path) => {
+        const result = await call({ op: 'mkdir', path })
+        if (result?.error) throw new Error(result.error.message)
+      },
     }
   }
 
@@ -995,6 +1008,39 @@ export class SessionAgentDO extends DurableObject {
       }
     }
     const cwd = workspace?.path ?? payload.cwd ?? WORKSPACE_ROOT
+
+    // Upstream's `mkdir(cwd, {recursive: true})`, moved rather than removed.
+    //
+    // Deleting it was the original reason this method is ours, because it runs
+    // on the HOST filesystem and the workspace is in a container. That was only
+    // half the lesson: the operation still has to happen, just in the filesystem
+    // that can do it.
+    //
+    // Without it, a workspace whose directory is gone -- and it goes whenever
+    // the container is recycled, which is every five idle minutes -- becomes a
+    // record that can never hold another session. attachSession resolves the
+    // session's cwd and fails with "does not resolve, so it cannot be
+    // validated", so "New session" simply stops working in that workspace,
+    // permanently, with a message that names neither the container nor the
+    // reason.
+    //
+    // Recreating it is the honest reading of what the two layers mean here: the
+    // workspace RECORD is the durable thing, and the directory is the part that
+    // was always ephemeral.
+    if (this.env?.EXEC) {
+      try {
+        await this.workspaceFsBridge().mkdir(cwd)
+      } catch (error) {
+        return reply({
+          ok: false,
+          error: {
+            code: 'internal',
+            message: `could not prepare the working directory "${cwd}": ${String(error?.message ?? error)}`,
+            details: { cwd },
+          },
+        })
+      }
+    }
 
     try {
       const existing = ctx.sessions.get(sessionId)
