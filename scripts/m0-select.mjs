@@ -15,7 +15,9 @@ const EXCLUDE = [
   [/^dsh-cordis-host-runner$/, 'design 5.5: node:vm plugin host; workerd ships vm as a non-functional stub'],
   [/^dsh-workflow-worker-thread$|^dsh-code-runtime/, 'vm + worker_threads'],
   [/^dsh-session-query/, 'design 5.3: cross-session search is out of scope; the sqlite variant also pulls node:sqlite'],
-  [/bash|pwsh|terminal|subprocess|sandbox|^dsh-fs-local|^dsh-fs-sandbox|landlock|native-command/, 'design 5.2: execution world; not installed in the minimal tier'],
+  // The execution world's PROVIDERS are ours (cf-exec-provider over U5), but
+  // the seams and the tools that use them are upstream's and must be installed.
+  [/^dsh-bash-local$|^dsh-bash-sandbox$|^dsh-pwsh|^dsh-fs-local$|^dsh-fs-sandbox$|^dsh-sandbox|^dsh-subprocess-local$|landlock|native-command|^dsh-terminal/, 'design 5.2: local/OS-bound execution providers, replaced by cf-exec-provider'],
   [/^dsh-storage-json$|^dsh-settings-file$|^dsh-credentials-local$|^dsh-spill-local$|^dsh-attachment-local$|^dsh-session-persistence-jsonl$/, 'design 5.3/5.5: local providers replaced by cf-* (the seams are still referenced)'],
   // dsh-jobs-local is NOT excluded: the M0 scan puts it among the 122 packages
   // with zero Node builtins, and dsh-jobs is an abstract seam that refuses to
@@ -29,7 +31,11 @@ const EXCLUDE = [
   [/^cordis-plugin-include$|^cordis-plugin-loader$/, 'resolve the plugin tree from files; design 10.6 makes it static'],
   [/^dsh-web-app$|^dsh-web-frontend$/, 'design 5.4: frontend hosting; U1 uses Workers Static Assets'],
   [/^dsh-headless$/, 'local headless mode'],
-  [/^dsh-tool-bash|^dsh-tool-fs|^dsh-tool-pwsh|^dsh-tool-str-replace-editor|^dsh-tool-ralph|^dsh-tool-cordis|^dsh-tool-workflow/, 'tools that need the execution world; not in the minimal tier'],
+  // dsh-tool-bash is installed: it is the standard tier's reason to exist.
+  // bash-persistent needs background processes, which cf-exec-provider does not
+  // implement yet, so it stays out rather than failing at the first long command.
+  [/^dsh-tool-bash-persistent$|^dsh-tool-pwsh|^dsh-tool-ralph|^dsh-tool-cordis|^dsh-tool-workflow/, 'needs background processes or an OS shell we do not provide'],
+  [/^dsh-tool-fs$|^dsh-tool-fs-search$|^dsh-tool-str-replace-editor$/, 'needs the fs provider, which is the next step after shell'],
   [/^dsh-persona$/, 'not installed yet; M1 uses the default'],
 
   // --- The following were discovered by M0 measurement; the design doc's

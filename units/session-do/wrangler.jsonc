@@ -18,6 +18,11 @@
   // ADR-12: the zero-configuration default. No key, no account beyond this one.
   "ai": { "binding": "AI" },
 
+  // ADR-06: presence of this binding IS the tier switch. Remove it and the
+  // shell seam stays unimplemented, its tools never register, and the same
+  // build serves the minimal tier.
+  "services": [{ "binding": "EXEC", "service": "dsh-exec" }],
+
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["SessionAgentDO"] }
   ]

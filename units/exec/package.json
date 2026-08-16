@@ -1,0 +1,7 @@
+{
+  "name": "@dsh-cloud/exec",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": { "@cloudflare/sandbox": "^0.7.0" }
+}

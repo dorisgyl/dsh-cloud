@@ -1,0 +1,30 @@
+{
+  // U5 dsh-exec — the execution world. Reached only by U2 over a service
+  // binding; it has no public route of its own.
+  "name": "dsh-exec",
+  "main": "src/index.mjs",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+
+  // A published image reference rather than ./Dockerfile. Building locally
+  // needs Docker, which is exactly the barrier design 10.6.3 wants to keep off
+  // the self-deployer — and off this machine, which has no Docker either.
+  //
+  // The tag MUST match the installed @cloudflare/sandbox version. They are one
+  // protocol split across a client and a server: with the SDK at 0.7.21 against
+  // image 0.7.0, every exec failed with "Session ... is not ready or shell has
+  // died", which reads like a container problem and is not one.
+  "containers": [
+    {
+      "class_name": "Sandbox",
+      "image": "docker.io/cloudflare/sandbox:0.7.21",
+      "instance_type": "lite",
+      "max_instances": 5
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "class_name": "Sandbox", "name": "Sandbox" }]
+  },
+  "migrations": [{ "new_sqlite_classes": ["Sandbox"], "tag": "v1" }]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "cf-credentials-do",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Upstream credentials provider over Worker secrets and Durable Object SQLite.",
+  "exports": { ".": "./src/index.mjs" },
+  "dependencies": { "@deepseek-ai/dsh-credentials": "0.1.0-rc.6" }
+}

@@ -1,21 +1,24 @@
 // cf-llm-transport — the Workers AI adapter.
 //
-// This is ADR-12's zero-configuration default: `wrangler deploy` and the thing
-// talks, with no API key anywhere. Cloudflare hosts DeepSeek models, so the
-// default runs DeepSeek's own model against DeepSeek's own harness without the
+// ADR-12's zero-configuration default: `wrangler deploy` and the thing talks,
+// with no API key anywhere. Cloudflare hosts DeepSeek models, so the default
+// runs DeepSeek's own model against DeepSeek's own harness without the
 // self-deployer signing up for anything.
 //
-// The other path in ADR-12 — AI Gateway, for any provider plus a custom base
-// URL — is a separate adapter. They differ in transport, not in this mapping.
+// Tool calls are the reason this file is longer than a text-only adapter would
+// be. Without them the model still tries: the harness advertises its tools in
+// the system prompt, and the model answers with DeepSeek's DSML markup as plain
+// prose, which nothing downstream parses. The agent then looks like it replied
+// when in fact it asked to run something. So tools go out in the request and
+// tool calls come back as `tool-call` blocks, not text.
 import { LlmAdapter } from '@deepseek-ai/dsh-llm'
 
 // Cloudflare hosts DeepSeek's own models, which is the right default for
-// DeepSeek's own harness — but they are paid-plan only, and the error says so
-// only at the first model call:
+// DeepSeek's own harness. They are paid-plan only, and the error says so only
+// at the first model call:
 //   5035: Model ... is not available on the Workers Free plan
 // The deployment already requires the paid plan for CPU reasons (see README),
-// so this stays the default; `AI_MODEL` overrides it for anyone who wants
-// something smaller or cheaper.
+// so this stays the default; `AI_MODEL` overrides it.
 export const DEFAULT_MODEL = '@cf/deepseek-ai/deepseek-v4-flash-0731'
 
 /** A model available without the paid plan, for smoke tests and free tiers. */
@@ -29,17 +32,54 @@ export function resolveModelId(env) {
 function toChatMessages(options) {
   const messages = []
   if (options.system) messages.push({ role: 'system', content: options.system })
+
   for (const message of options.messages ?? []) {
-    const text = (message.content ?? [])
-      .filter((block) => block?.type === 'text')
-      .map((block) => block.text)
-      .join('')
-    // Tool calls and results have no place in this minimal mapping yet; they are
-    // dropped rather than mangled, so a turn that needs them fails visibly at
-    // the model rather than silently losing correlation.
+    const blocks = message.content ?? []
+
+    // A tool result is its own message, correlated by the call id. Folding it
+    // into text would lose the correlation and the model would answer as if it
+    // had never run anything.
+    const results = blocks.filter((b) => b?.type === 'tool-result')
+    if (results.length) {
+      for (const result of results) {
+        messages.push({
+          role: 'tool',
+          tool_call_id: result.toolCallId,
+          content: (result.content ?? [])
+            .filter((b) => b?.type === 'text').map((b) => b.text).join('') || '(no output)',
+        })
+      }
+      continue
+    }
+
+    const text = blocks.filter((b) => b?.type === 'text').map((b) => b.text).join('')
+    const calls = blocks.filter((b) => b?.type === 'tool-call')
+
+    if (calls.length) {
+      messages.push({
+        role: 'assistant',
+        content: text || null,
+        tool_calls: calls.map((call) => ({
+          id: call.id,
+          type: 'function',
+          function: { name: call.name, arguments: call.arguments },
+        })),
+      })
+      continue
+    }
+
     if (text) messages.push({ role: message.role === 'assistant' ? 'assistant' : 'user', content: text })
   }
   return messages
+}
+
+/** Upstream's ToolSchema -> the OpenAI function-tool shape. */
+function toChatTools(tools) {
+  if (!tools?.length) return undefined
+  return tools.map((tool) => ({
+    type: 'function',
+    function: { name: tool.name, description: tool.description, parameters: tool.parameters },
+  }))
 }
 
 /** Read an SSE body into `data:` payload strings. */
@@ -70,10 +110,6 @@ async function* sseEvents(stream, signal) {
 }
 
 export class WorkersAiAdapter extends LlmAdapter {
-  /**
-   * @param ai      the `AI` binding
-   * @param models  model ids to advertise; the first is the default
-   */
   constructor(ai, models = [DEFAULT_MODEL]) {
     super()
     this.ai = ai
@@ -91,6 +127,9 @@ export class WorkersAiAdapter extends LlmAdapter {
     return this.models.map((id) => ({ provider, id, name: id.replace(/^@cf\//, '') }))
   }
 
+  // Must satisfy LlmResolvedModelInfo: `id` (not `model`), a human `name`, and
+  // capacity nested under `context`. Getting the shape wrong fails the turn at
+  // the model call with INVALID_MODEL_INFO, visible only in the session log.
   async resolveModel(provider, model) {
     return {
       provider,
@@ -108,37 +147,91 @@ export class WorkersAiAdapter extends LlmAdapter {
       stream: true,
       max_tokens: options.maxTokens ?? 2048,
     }
+    const tools = toChatTools(options.tools)
+    if (tools) body.tools = tools
     if (options.temperature !== undefined) body.temperature = options.temperature
 
     const result = await this.ai.run(options.model, body, { signal: options.signal })
 
+    // Block 0 is text; tool calls take their own indexes after it.
     yield { type: 'block-start', index: 0, blockType: 'text' }
     let text = ''
     let usage = null
+    // index -> { id, name, args, blockIndex }
+    const calls = new Map()
+    let nextBlockIndex = 1
 
-    // With `stream: true` the binding answers with an SSE ReadableStream; some
-    // model families answer with a plain object instead, so both are handled.
+    const openCall = (slot) => {
+      if (slot.blockIndex !== undefined) return []
+      slot.blockIndex = nextBlockIndex++
+      return [{ type: 'block-start', index: slot.blockIndex, blockType: 'tool-call' }]
+    }
+
     if (result && typeof result.getReader === 'function') {
       for await (const payload of sseEvents(result, options.signal)) {
         let event
         try { event = JSON.parse(payload) } catch { continue }
-        const delta = event.response ?? event.choices?.[0]?.delta?.content ?? ''
+
+        const choice = event.choices?.[0]
+        const delta = event.response ?? choice?.delta?.content ?? ''
         if (delta) {
           text += delta
           yield { type: 'text-delta', index: 0, text: delta }
         }
+
+        for (const call of choice?.delta?.tool_calls ?? event.tool_calls ?? []) {
+          const key = call.index ?? call.id ?? 0
+          if (!calls.has(key)) calls.set(key, { id: call.id, name: '', args: '' })
+          const slot = calls.get(key)
+          if (call.id) slot.id = call.id
+          if (call.function?.name) slot.name = call.function.name
+          const argsDelta = call.function?.arguments ?? ''
+          if (argsDelta) slot.args += argsDelta
+
+          for (const chunk of openCall(slot)) yield chunk
+          yield {
+            type: 'tool-call-delta',
+            index: slot.blockIndex,
+            id: slot.id ?? `call_${key}`,
+            name: slot.name || undefined,
+            argumentsDelta: argsDelta,
+          }
+        }
+
         if (event.usage) usage = event.usage
       }
     } else {
-      const whole = result?.response ?? result?.choices?.[0]?.message?.content ?? ''
+      const message = result?.choices?.[0]?.message
+      const whole = result?.response ?? message?.content ?? ''
       if (whole) {
         text = String(whole)
         yield { type: 'text-delta', index: 0, text }
+      }
+      for (const call of message?.tool_calls ?? []) {
+        const slot = { id: call.id, name: call.function?.name ?? '', args: call.function?.arguments ?? '' }
+        for (const chunk of openCall(slot)) yield chunk
+        yield {
+          type: 'tool-call-delta',
+          index: slot.blockIndex,
+          id: slot.id,
+          name: slot.name,
+          argumentsDelta: slot.args,
+        }
+        calls.set(slot.id, slot)
       }
       usage = result?.usage ?? null
     }
 
     yield { type: 'block-end', index: 0, block: { type: 'text', text } }
+    for (const slot of calls.values()) {
+      if (slot.blockIndex === undefined) continue
+      yield {
+        type: 'block-end',
+        index: slot.blockIndex,
+        block: { type: 'tool-call', id: slot.id, name: slot.name, arguments: slot.args || '{}' },
+      }
+    }
+
     yield {
       type: 'usage',
       usage: {
@@ -149,7 +242,7 @@ export class WorkersAiAdapter extends LlmAdapter {
         outputTokens: usage?.completion_tokens ?? Math.ceil(text.length / 4),
       },
     }
-    yield { type: 'finish', reason: { kind: 'stop' } }
+    yield { type: 'finish', reason: { kind: calls.size ? 'tool-calls' : 'stop' } }
   }
 }
 

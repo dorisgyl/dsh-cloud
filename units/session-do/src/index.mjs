@@ -19,6 +19,8 @@ import { withCoalescing } from '../../../packages/cf-llm-transport/src/coalesce.
 import cfStorageDo from '../../../packages/cf-storage-do/src/index.mjs'
 import { CfSessionPersistenceDo } from '../../../packages/cf-session-persistence-do/src/index.mjs'
 import { CfSettingsDo } from '../../../packages/cf-settings-do/src/index.mjs'
+import { CfShellExecutor } from '../../../packages/cf-exec-provider/src/shell.mjs'
+import { CfCredentialsDo } from '../../../packages/cf-credentials-do/src/index.mjs'
 import { TurnQueue } from './turn-queue.mjs'
 
 // Plugin-shaped exports that are not plugins, plus the seams registered by hand.
@@ -39,6 +41,15 @@ const SKIP = [
   // implementation. Registering the base publishes a service whose load()
   // does not exist.
   '@deepseek-ai/dsh-settings',
+  // And once more for the execution world. Three seams now follow this exact
+  // shape — persistence, jobs, settings, shell — so it is a rule, not a series
+  // of surprises: an abstract seam publishes a service that refuses to work,
+  // and the concrete provider must be the only thing registered under its name.
+  '@deepseek-ai/dsh-shell',
+  // Five now. dsh-credentials publishes a service whose resolve() does not
+  // exist; the symptom was "credentials.resolve is not a function" from a
+  // web-search tool, three layers away from the cause.
+  '@deepseek-ai/dsh-credentials',
   // Needs `{ backend }` config naming a live backend, so it is registered after
   // cf-storage-do rather than expanded blind.
   '@deepseek-ai/dsh-storage-domain',
@@ -116,6 +127,20 @@ export class SessionAgentDO extends DurableObject {
     await ctx.plugin(cfStorageDo, { name: 'do-sqlite', sql: this.sql })
     await ctx.plugin(CfSessionPersistenceDo, { sql: this.sql })
     await ctx.plugin(CfSettingsDo, { sql: this.sql })
+    await ctx.plugin(CfCredentialsDo, { env: this.env, sql: this.sql })
+
+    // ADR-06: the tier is decided by which bindings exist, not by which code
+    // was compiled. No EXEC binding means the minimal tier — the shell seam
+    // stays unimplemented and its tools never register, so nothing has to
+    // detect the tier or hide anything.
+    if (this.env?.EXEC) {
+      await ctx.plugin(CfShellExecutor, {
+        exec: this.env.EXEC,
+        // One sandbox per session for now. A workspace outliving its session
+        // (design 6.3) is the next step, and changes only this id.
+        sandboxId: this.sessionId,
+      })
+    }
     // storageDomain publishes only once a named backend service exists.
     const domain = modules['@deepseek-ai/dsh-storage-domain']
     await ctx.plugin(domain.default ?? domain, { backend: 'do-sqlite' })
@@ -164,6 +189,33 @@ export class SessionAgentDO extends DurableObject {
         lastSeq: this.maxSeq() ?? -1,
       }))
       return new Response(null, { status: 101, webSocket: client })
+    }
+
+    // Talk to U5 directly, bypassing the agent loop, so a container problem can
+    // be told apart from a tool-calling problem.
+    if (url.pathname === '/exec-selftest') {
+      if (!this.env?.EXEC) return Response.json({ error: 'no EXEC binding' }, { status: 503 })
+      const op = url.searchParams.get('op') ?? 'exec'
+      const payload = {
+        sandboxId: url.searchParams.get('sandbox') ?? this.sessionId,
+        command: url.searchParams.get('cmd') ?? 'echo selftest',
+        path: url.searchParams.get('path') ?? '/workspace',
+        content: 'selftest',
+      }
+      // The agent path sends cwd and env; the bare selftest did not, and only
+      // the agent path failed. Make the difference testable.
+      if (url.searchParams.has('cwd')) payload.cwd = url.searchParams.get('cwd')
+      if (url.searchParams.get('withEnv') === '1') payload.env = { TERM: 'dumb', NO_COLOR: '1' }
+      try {
+        const response = await this.env.EXEC.fetch(`http://exec/${op}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        return Response.json({ status: response.status, body: await response.json() })
+      } catch (error) {
+        return Response.json({ threw: String(error?.message ?? error) })
+      }
     }
 
     if (url.pathname === '/history') {
