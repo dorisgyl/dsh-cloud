@@ -118,6 +118,60 @@ The diagnosis above was only possible because the reports were fixed first.
 Plus `/api/persistence-probe`, `/api/vfs-probe` and `/api/pty-probe`, each of
 which exists because a symptom was reported by a layer that was not at fault.
 
+## The whole surface, swept
+
+All 52 methods were called. Every one routes and answers — no 404s, no 500s.
+
+| outcome | n | meaning |
+|---|---:|---|
+| `ok` | 13 | succeeded with an empty payload |
+| `bad-request` | 36 | payload validation, for the empty object sent |
+| real answers | 3 | below |
+
+The three that say something:
+
+- **`host.pickDirectory`** — `directory-picker-unavailable`: it needs the
+  `native` capability and ours serves `browse`. `host.listDirectory` works and
+  returns the container's `/workspace`. This is design 8.2 item 1, confirmed
+  from the server side: the UI's picker needs its plugin row changed.
+- **`workspace.create`** — blocked, deliberately. See below.
+- **`settings.openDocument`** — no local document to open, which is true.
+
+A second pass with realistic payloads confirmed `session.rename`,
+`session.search`, `session.selectModel` and `host.createDirectory` (which
+created a real directory in the container).
+
+### A search that reported "no matches" over 982 matching rows
+
+`session.search` selected a `time` column that does not exist — the table is
+`(id, seq, type, event)`, with the timestamp inside the serialised event — and a
+`try/catch` around the query returned an empty array.
+
+The catch was ours, and it is the same failure this project keeps finding
+elsewhere: **a check that cannot run, reporting the shape of a check that ran
+and found nothing.** Removing it named the cause in a single request. The escape
+character moved from `\` to `!` for a related reason — `ESCAPE '\'` has to
+survive a template literal, a bundler and SQLite's own parser, and it did not.
+
+Search now also covers every session in the Durable Object, not the one it was
+constructed for. That was right when an object held one session and wrong the
+moment the UI could create more.
+
+### Workspaces are left failing, on purpose
+
+`dsh-workspace` validates every path with one `realpath()` and four
+`stat(...).isDirectory()` calls against the **host** filesystem, which cannot
+see the container the workspace is in. `workspace.create` therefore reports "no
+such file or directory" about a path that exists perfectly well.
+
+Rewriting `realpath` to pure normalisation was tried and taken back out: it made
+the first call pass and the next fail with a more confusing message. Making them
+all pass means blinding the validation entirely, so that any string becomes a
+valid workspace — which is the failure mode this whole project has spent its
+time on. The honest error stays, and design 6.3's per-tenant registry is where
+it gets solved, doing its checks through the fs seam as `cf-workspace-picker`
+already does.
+
 ## Not done
 
 - **Not opened in a browser.** Every call above was made with a service token
