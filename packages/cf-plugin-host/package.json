@@ -1,0 +1,8 @@
+{
+  "name": "cf-plugin-host",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Third-party harness plugins in dynamic Worker isolates.",
+  "exports": { ".": "./src/index.mjs" }
+}

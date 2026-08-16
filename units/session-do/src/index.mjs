@@ -28,6 +28,7 @@ import { CfSessionQueryDo } from '../../../packages/cf-session-query-do/src/inde
 import { CfWorkspacePicker } from '../../../packages/cf-workspace-picker/src/index.mjs'
 import { CfAttachmentsDo } from '../../../packages/cf-attachments-do/src/index.mjs'
 import cfLoader from '../../../packages/cf-loader/src/index.mjs'
+import { PluginRegistry } from '../../../packages/cf-plugin-host/src/index.mjs'
 import { TurnQueue } from './turn-queue.mjs'
 
 // Plugin-shaped exports that are not plugins, plus the seams registered by hand.
@@ -350,6 +351,21 @@ export class SessionAgentDO extends DurableObject {
     }
     this.adapter = this.workersAi ?? this.stub
 
+    // Third-party plugins, installed at runtime and running in their own
+    // isolates. Attached AFTER the tree, because their tools register into a
+    // context that has to exist first, and because a plugin failing must not
+    // stop the harness from booting -- an installed plugin is not a dependency.
+    this.plugins = new PluginRegistry({
+      sql: this.sql,
+      loader: this.env?.LOADER,
+      capability: (pluginId) => this.ctx.exports.PluginHost({
+        props: { pluginId, sessionObject: this.sessionId },
+      }),
+    })
+    if (this.plugins.available) {
+      this.pluginReport = await this.plugins.attachTools(ctx)
+    }
+
     // Live push. `session/event` is a real Cordis event carrying (session,
     // event) on every append — the log-entry names like `turn/start` are not
     // Cordis events, which is what an earlier note here got wrong.
@@ -525,6 +541,54 @@ export class SessionAgentDO extends DurableObject {
     // BACK into us? Both halves matter: the first decides whether third-party
     // plugins are possible, the second decides whether they can be written as
     // ordinary Cordis plugins instead of as a second plugin model.
+    // Installing, listing and removing third-party plugins.
+    //
+    // A deliberately plain surface: the point of this milestone is that a
+    // plugin can be added to a RUNNING deployment, so the operation that
+    // matters is the one that does not involve a redeploy.
+    if (url.pathname === '/plugins') {
+      await this.ensureTree()
+      if (!this.plugins?.available) {
+        return Response.json({
+          error: 'plugins-unavailable',
+          hint: 'this deployment has no LOADER binding; add worker_loaders to wrangler.jsonc',
+        }, { status: 503 })
+      }
+
+      if (request.method === 'GET') {
+        return Response.json({ installed: this.plugins.list(), ...(this.pluginReport ?? {}) })
+      }
+
+      if (request.method === 'DELETE') {
+        const id = url.searchParams.get('id')
+        if (!id) return Response.json({ error: 'id is required' }, { status: 400 })
+        this.plugins.remove(id)
+        // The tree holds tools registered from the old source, so it is stale
+        // the moment a plugin changes. Dropping it is cheaper and more honest
+        // than trying to unregister exactly what that plugin added.
+        this.tree = null
+        return Response.json({ removed: id })
+      }
+
+      if (request.method === 'POST') {
+        let body
+        try {
+          body = await request.json()
+        } catch {
+          return Response.json({ error: 'body is not JSON' }, { status: 400 })
+        }
+        try {
+          const installed = this.plugins.install(body?.id, body?.source)
+          this.tree = null
+          return Response.json({ installed })
+        } catch (error) {
+          return Response.json({ error: String(error?.message ?? error) }, { status: 400 })
+        }
+      }
+
+      return Response.json({ error: 'use GET, POST or DELETE' }, { status: 405 })
+    }
+
     if (url.pathname === '/loader-probe') {
       if (!this.env?.LOADER) {
         return Response.json({ ok: false, error: 'no LOADER binding on this deployment' }, { status: 503 })
@@ -1537,6 +1601,9 @@ export class SessionAgentDO extends DurableObject {
             // Nothing was collecting these, so they simply did not exist as far
             // as any report was concerned.
             lateErrors: this.lateErrors ?? [],
+            plugins: this.plugins?.available
+              ? { installed: this.plugins.list(), ...(this.pluginReport ?? {}) }
+              : { installed: [], note: 'no LOADER binding: third-party plugins are unavailable' },
             // The end of the chain, and the only thing the model can actually
             // see. Everything above is plumbing; this is the outcome.
             // `schemas()` is what the model is actually offered -- the same
