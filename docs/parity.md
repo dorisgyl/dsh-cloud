@@ -109,7 +109,8 @@ injects the graph as `window.__DSH_BOOT__`.
 | Event downlinks | ours | WebSockets for the browser, SSE for non-browser clients — upstream ships both client platforms over the same paths |
 | Web server / static file host | ours | Workers Static Assets; `node:http` has no equivalent |
 | Directory picker | ours | `cf-workspace-picker` serves the `browse` capability over the container; `native` needs a desktop |
-| Plugin management panel | partial | the `loader` service and `pluginInventory` are live and served; the list is empty until the tree is composed THROUGH the loader (see below) |
+| Plugin management panel | partial | the `loader` service and `pluginInventory` are live and served; the list is empty until the tree is composed THROUGH the loader |
+| **Third-party plugins** | **ours** | installed into a running deployment, running in isolates with no network; upstream's authoring model, a narrower `ctx` (`M4-plugins.md`) |
 | Agent presets | no | `dsh-agent-presets` needs the file loader; `session.create` refuses a preset rather than ignoring it |
 | Attachments | ours | `cf-attachments-do` stores images beside the log — **never executed**, because the bound model takes no images |
 
@@ -185,7 +186,8 @@ load without them.
 
 - **Workspace durability.** The single biggest gap. A workspace is useful within
   the session that created it.
-- **Worker extensions / a plugin plane** (ADR-09).
+- **A plugin PLANE.** Third-party plugins work (`M4-plugins.md`), but only for
+  tools, with an empty capability face and no permission model.
 - **E2B execution tier** (design 10.6.2's third tier).
 - **The tenant object** (U3), and with it per-tenant settings and quotas.
 - **R2 cold storage** for the session log.

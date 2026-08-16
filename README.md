@@ -26,6 +26,7 @@ What runs today, verified against a real deployment:
 | Files — read / write / edit, same execution world as the shell | yes |
 | Terminal — a real PTY, state kept across turns | yes, but not the default `bash` (see `docs/M2-terminal.md`) |
 | The dsh web UI | yes — served, and its protocol works end to end |
+| Third-party plugins, installed without a redeploy | yes — isolated, no network of their own (`docs/M4-plugins.md`) |
 | Workspace files surviving container recycling | **no** — see Limitations |
 
 See `docs/M0-findings.md`, `docs/M1-*.md`, `docs/M2-*.md` and `docs/M3-web-ui.md`
