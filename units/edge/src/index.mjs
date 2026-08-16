@@ -12,6 +12,23 @@ import { identify, isConfigured, sessionObjectName } from '../../../packages/cf-
 
 const API_PREFIX = '/api'
 
+// The transport the dsh web UI speaks, from dsh-client-connection's own
+// constants. Both are WebSockets carrying the mux RPC framing
+// (client-request / server-response / server-request / client-response) and an
+// eighteen-message downlink union. Neither is implemented.
+//
+// They answer 501 rather than falling through to the session object, which
+// would upgrade the socket and speak a different, private protocol. A transport
+// that connects and then behaves wrongly is far worse than one that refuses:
+// this whole project has spent its time on failures that returned 200.
+const UI_TRANSPORT = new Set(['/api/events.mux', '/api/events.host'])
+
+const NOT_IMPLEMENTED = {
+  error: 'ui-transport-not-implemented',
+  hint: 'The dsh web UI is served, but the mux protocol behind it is not built yet. '
+    + 'See docs/M3-web-ui.md. The JSON surface under /api (state, history, ?q=) works.',
+}
+
 /** A session id the caller may choose, but only within its own shard. */
 function sessionIdFrom(url) {
   return url.searchParams.get('session') ?? 'default'
@@ -48,6 +65,10 @@ export default {
 
     const claims = await identify(request, env)
     if (!claims) return Response.json({ error: 'unauthorized' }, { status: 401 })
+
+    if (UI_TRANSPORT.has(url.pathname)) {
+      return Response.json(NOT_IMPLEMENTED, { status: 501 })
+    }
 
     if (url.pathname === `${API_PREFIX}/whoami`) {
       return Response.json({
