@@ -15,6 +15,27 @@
 import { SessionQueryEngine } from '@deepseek-ai/dsh-session-query'
 
 const DEFAULT_LIMIT = 20
+
+/**
+ * Wrap a query as a LIKE pattern, escaping the wildcards with `!`.
+ *
+ * Deliberately not a backslash. `ESCAPE '\'` has to survive a JS template
+ * literal, a bundler and SQLite's own string parsing, and it did not: the clause
+ * failed, the failure was swallowed, and the search reported "no matches" over a
+ * table with 982 matching rows. `!` needs no escaping at any of those layers.
+ */
+function likePattern(query) {
+  return `%${String(query ?? '').replace(/[!%_]/g, '!$&')}%`
+}
+
+/** The event's own timestamp; 0 when the row will not parse. */
+function readTime(event) {
+  try {
+    return JSON.parse(event)?.time ?? 0
+  } catch {
+    return 0
+  }
+}
 const SNIPPET_RADIUS = 90
 
 export class CfSessionQueryDo extends SessionQueryEngine {
@@ -33,17 +54,21 @@ export class CfSessionQueryDo extends SessionQueryEngine {
    * it, and a wrong-but-fast index is worse than an honest scan.
    */
   rowsMatching(sessionId, query, limit) {
-    const needle = `%${String(query ?? '').replace(/[\\%_]/g, '\\$&')}%`
-    try {
-      return this.sql.exec(
-        `SELECT seq, type, time, event FROM session_event
-          WHERE id = ? AND event LIKE ? ESCAPE '\\'
-          ORDER BY seq DESC LIMIT ?`,
-        sessionId, needle, limit,
-      ).toArray()
-    } catch {
-      return []
-    }
+    // No try/catch on purpose. The first version swallowed every failure and
+    // returned an empty array, which reads as "no matches" -- and that is
+    // exactly what it did: the query was failing while raw SQL found 982
+    // matching rows in the same table at the same moment. A search that cannot
+    // run has to say so.
+    // `time` is not a column -- the table is (id, seq, type, event) and the
+    // timestamp lives inside the serialised event. Selecting it produced
+    // "no such column: time", which the swallowed catch turned into an empty
+    // result set for every query.
+    return this.sql.exec(
+      `SELECT seq, type, event FROM session_event
+        WHERE id = ? AND event LIKE ? ESCAPE '!'
+        ORDER BY seq DESC LIMIT ?`,
+      sessionId, likePattern(query), limit,
+    ).toArray()
   }
 
   /** A window of the raw text around the first match, for the result list. */
@@ -61,7 +86,8 @@ export class CfSessionQueryDo extends SessionQueryEngine {
       sessionId,
       seq: row.seq,
       type: row.type,
-      time: row.time,
+      // From the event body, because the table does not carry it as a column.
+      time: readTime(row.event),
       // Every row in this table is a live log entry; nothing here is shadowed
       // or log-only, because repair rewrites rows in place.
       surface: 'current',
@@ -80,29 +106,45 @@ export class CfSessionQueryDo extends SessionQueryEngine {
   }
 
   /**
-   * One Durable Object holds one session, so "search across sessions" is a
-   * search of this one.
+   * Every session in this Durable Object, not just the one it was created for.
    *
-   * Reaching the others means fanning out across Durable Objects, which needs a
-   * tenant-level index that does not exist yet (design 5.3). Returning this
-   * session's hits is the true subset; returning nothing would be a different
-   * claim.
+   * An earlier version searched `this.sessionId` alone, which was right when a
+   * Durable Object held exactly one session and wrong the moment the client
+   * protocol arrived: the UI creates sessions through `session.create`, and they
+   * all live in this object's SQLite. The symptom was a search that returned
+   * nothing while the text was plainly in the log of a sibling session.
+   *
+   * What is still out of scope is the other DIRECTION: sessions belonging to
+   * other tenants live in other Durable Objects, and reaching them needs a
+   * tenant-level index (design 5.3). This is the true subset of that.
    */
   async searchSessions(request) {
     const limit = request.limit ?? DEFAULT_LIMIT
-    const sessionId = this.sessionId
-    const items = this.hitsFor(sessionId, request.query, limit)
-    if (!items.length) return { items: [] }
+    const ids = this.sql.exec(
+      `SELECT id, MAX(seq) AS lastSeq FROM session_event
+        WHERE event LIKE ? ESCAPE '!'
+        GROUP BY id ORDER BY lastSeq DESC LIMIT ?`,
+      likePattern(request.query), limit,
+    ).toArray()
 
-    const session = this.ctx.sessions?.get?.(sessionId)
     return {
-      items: [{
-        header: session?.header ?? { id: sessionId },
-        live: Boolean(session),
-        persisted: true,
-        bestMatch: items[0],
-      }],
+      items: ids.flatMap((row) => {
+        const hits = this.hitsFor(row.id, request.query, 1)
+        if (!hits.length) return []
+        const session = this.ctx.sessions?.get?.(row.id)
+        return [{
+          header: session?.header ?? this.headerOf(row.id) ?? { id: row.id },
+          live: Boolean(session),
+          persisted: true,
+          bestMatch: hits[0],
+        }]
+      }),
     }
+  }
+
+  headerOf(sessionId) {
+    const row = this.sql.exec('SELECT meta FROM session_header WHERE id = ?', sessionId).toArray()[0]
+    return row ? JSON.parse(row.meta) : undefined
   }
 }
 

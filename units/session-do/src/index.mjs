@@ -492,6 +492,27 @@ export class SessionAgentDO extends DurableObject {
         }
       })()
 
+      // Raw SQL beside the seam call: when a search returns nothing, the two
+      // answers together say whether the rows are missing or the query is.
+      out.search = await (async () => {
+        const q = url.searchParams.get('q') ?? 'turn'
+        const result = {}
+        try {
+          result.tables = this.sql.exec("SELECT name FROM sqlite_master WHERE type='table'").toArray().map((r) => r.name)
+        } catch (error) { result.tables = String(error?.message ?? error) }
+        try {
+          result.totalRows = this.sql.exec('SELECT COUNT(*) AS n FROM session_event').toArray()[0]?.n
+          result.distinctIds = this.sql.exec('SELECT id, COUNT(*) AS n FROM session_event GROUP BY id').toArray()
+          result.likeRows = this.sql.exec(
+            "SELECT id, COUNT(*) AS n FROM session_event WHERE event LIKE ? GROUP BY id", `%${q}%`,
+          ).toArray()
+        } catch (error) { result.sqlError = String(error?.message ?? error) }
+        try {
+          result.viaSeam = await ctx.sessionQuery.searchSessions({ query: q })
+        } catch (error) { result.seamError = String(error?.message ?? error) }
+        return result
+      })()
+
       out.rawHistory = await (async () => {
         try {
           return await this.api.sessions.history({ rpcId: 'raw', payload: { sessionId: id } })

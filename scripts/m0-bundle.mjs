@@ -134,6 +134,24 @@ const aliasPlugin = {
 const NEVER_ABORTED = '({ aborted: false, reason: undefined, onabort: null, ' +
   'addEventListener() {}, removeEventListener() {}, dispatchEvent() { return false }, throwIfAborted() {} })'
 const rewrites = []
+// A rewrite that was tried here and taken back out, because it was half a fix.
+//
+// dsh-workspace resolves and validates every workspace path against the HOST
+// filesystem: one `realpath()` and four `stat(...).isDirectory()` calls. On
+// workerd that filesystem holds only /bundle, /tmp and /dev, while the workspace
+// lives in a container reached over a service binding, so `workspace.create`
+// fails with "no such file or directory" about a path that exists perfectly
+// well -- just not here.
+//
+// Rewriting realpath to pure normalisation made the first call pass and the
+// next one fail with a differently confusing message. Making them all pass
+// means blinding the validation entirely: every path becomes a valid workspace,
+// including ones that exist nowhere. That is the failure mode this project has
+// spent its time on -- configured-looking and silently wrong -- so the registry
+// is left reporting an honest error instead, and design 6.3's per-tenant
+// workspace registry is where it gets solved, doing its checks through the fs
+// seam like cf-workspace-picker already does.
+
 const lazySignal = {
   name: 'defer-module-scope-abortcontroller',
   setup(build) {
@@ -142,7 +160,7 @@ const lazySignal = {
       const src = await readFile(args.path, 'utf8')
       // Only the module-scope assignment form is rewritten; uses inside a
       // function body are left alone.
-      const out = src.replace(
+      let out = src.replace(
         /^(\s*(?:var|let|const)\s+\w+\s*=\s*)new AbortController\(\)\.signal/gm,
         (_, head) => head + NEVER_ABORTED
       )
