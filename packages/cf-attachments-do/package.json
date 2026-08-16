@@ -1,0 +1,9 @@
+{
+  "name": "cf-attachments-do",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Upstream attachments seam over Durable Object SQLite.",
+  "exports": { ".": "./src/index.mjs" },
+  "dependencies": { "@deepseek-ai/dsh-attachment": "0.1.0-rc.6" }
+}

@@ -11,7 +11,7 @@
 import { DurableObject } from 'cloudflare:workers'
 import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { toFetchHandler } from '@deepseek-ai/dsh-host-apiproxy'
+import { createApiProxy, toFetchHandler } from '@deepseek-ai/dsh-host-apiproxy'
 import { modules } from '../build/plugins.generated.js'
 import { assemble, servicesOn, unmetInjects } from '../../../packages/cf-boot/src/plugin-tree.mjs'
 import { StubLlmAdapter } from '../../../packages/cf-testing/src/stub-llm-adapter.mjs'
@@ -26,6 +26,7 @@ import { CfSubprocessService } from '../../../packages/cf-exec-provider/src/subp
 import { CfCredentialsDo } from '../../../packages/cf-credentials-do/src/index.mjs'
 import { CfSessionQueryDo } from '../../../packages/cf-session-query-do/src/index.mjs'
 import { CfWorkspacePicker } from '../../../packages/cf-workspace-picker/src/index.mjs'
+import { CfAttachmentsDo } from '../../../packages/cf-attachments-do/src/index.mjs'
 import { TurnQueue } from './turn-queue.mjs'
 
 // Plugin-shaped exports that are not plugins, plus the seams registered by hand.
@@ -68,6 +69,13 @@ const SKIP = [
   // in. cf-session-query-do and cf-workspace-picker are the providers.
   '@deepseek-ai/dsh-session-query',
   '@deepseek-ai/dsh-host-directory-picker',
+  // Ten. The abstract AttachmentStore declares `imageLimits` and does not have
+  // it, and the session projection registry parses every unit's view through
+  // its schema -- so one absent property failed the whole projection snapshot,
+  // and the snapshot is on the path of every transcript read. The visible
+  // symptom was `session.history` answering "expected object, received
+  // undefined" with an empty path.
+  '@deepseek-ai/dsh-attachment',
   // Needs `{ backend }` config naming a live backend, so it is registered after
   // cf-storage-do rather than expanded blind.
   '@deepseek-ai/dsh-storage-domain',
@@ -77,6 +85,17 @@ const SKIP = [
   // always loads outside that window, and an exception there was landing
   // nowhere at all.
   '@deepseek-ai/dsh-workspace',
+  // Constructed by hand instead, for one field. ApiProxyService passes
+  // `cwd: process.cwd()` as the default working directory for sessions it
+  // creates, and on workerd that is `/bundle` -- the read-only VFS the code was
+  // loaded from, which has nothing to do with the execution world. A session
+  // created from the UI would carry it, and every path the agent resolved
+  // afterwards would be relative to the wrong root.
+  //
+  // createApiProxy is exported, so the fix is to call it with the right cwd.
+  // Nothing on the host side injects `apiProxy` -- only the browser client
+  // names it -- so not publishing the service costs nothing here.
+  '@deepseek-ai/dsh-host-apiproxy',
   // A deliberate choice between two packages that register the SAME tool name.
   //
   // dsh-tool-bash and dsh-tool-bash-persistent both register `bash`, so exactly
@@ -100,6 +119,12 @@ const SKIP = [
   // and see docs/M2-terminal.md.
   '@deepseek-ai/dsh-tool-bash-persistent',
 ]
+
+// The one workspace root, and it is a path in the CONTAINER, not in this
+// Worker. workerd's virtual filesystem holds only /bundle (read-only), /tmp and
+// /dev, so nothing here can create it — which is correct, because nothing here
+// should: the execution world is where files live.
+const WORKSPACE_ROOT = '/workspace'
 
 // Config for plugins whose schema has required fields. cf-settings-do will
 // supply these from TenantDO once it exists.
@@ -208,6 +233,7 @@ export class SessionAgentDO extends DurableObject {
     // could no longer be deferred; see the class for why it searches for real
     // rather than answering with an empty page.
     await ctx.plugin(CfSessionQueryDo, { sql: this.sql, sessionId: this.sessionId })
+    await ctx.plugin(CfAttachmentsDo, { sql: this.sql })
 
     // ADR-06: the tier is decided by which bindings exist, not by which code
     // was compiled. No EXEC binding means the minimal tier — the shell seam
@@ -297,7 +323,36 @@ export class SessionAgentDO extends DurableObject {
     // releases dsh-host-apiproxy. Snapshotting the service list immediately
     // reported `workspaceRegistry` as unmet and left ctx.apiProxy undefined --
     // a tree that was fine and had simply not finished.
-    await settleFor(ctx, ['workspaceRegistry', 'apiProxy'], 3000)
+    await settleFor(ctx, ['workspaceRegistry'], 3000)
+
+    // Align the tree-level default model with the binding that actually exists.
+    //
+    // CONFIG's `{provider: 'stub'}` is a compile-time value and the turn path
+    // overrides it per agent, so it never mattered -- until the client protocol
+    // arrived, which reads `agentDefaultModel.currentSelection()` for every
+    // session IT creates. A session started from the UI was answering with the
+    // test stub on a deployment with a real model bound.
+    try {
+      const selection = chooseProvider(this.env, this.modelOverride, this.providerOverride)
+      if (ctx.agentDefaultModel?.currentSelection()?.provider !== selection.provider) {
+        await ctx.agentDefaultModel.saveSelection(selection)
+      }
+    } catch (error) {
+      this.lateErrors.push({ specifier: 'agent-default-model', error: String(error?.message ?? error) })
+    }
+
+    // The dsh web UI's protocol, over upstream's own implementation of it.
+    try {
+      this.api = createApiProxy(ctx, {
+        cwd: WORKSPACE_ROOT,
+        defaultModelSelection: () => ctx.agentDefaultModel.currentSelection(),
+        saveDefaultModelSelection: (selection) => ctx.agentDefaultModel.saveSelection(selection),
+        // No desktop: there is nothing to reveal a path in.
+        canOpenPath: () => false,
+      })
+    } catch (error) {
+      this.lateErrors.push({ specifier: 'api-proxy', error: String(error?.message ?? error) })
+    }
 
     this.tree = { ctx, report, services: servicesOn(ctx), assembleMs: Date.now() - t0 }
     return this.tree
@@ -383,6 +438,98 @@ export class SessionAgentDO extends DurableObject {
       } catch (error) {
         return Response.json({ ok: false, error: String(error?.message ?? error), stack: String(error?.stack ?? '').slice(0, 800) })
       }
+    }
+
+    // Call the persistence seam directly, so a failure reported three layers
+    // away ("history unavailable for session ...") can be attributed to the
+    // layer that actually produced it.
+    // What the Worker's own virtual filesystem allows. Upstream assumes the host
+    // and the execution world share a filesystem; here they do not, and
+    // session.create fails on a mkdir of the project directory. Which paths are
+    // writable decides how that is fixed, so measure rather than assume.
+    if (url.pathname === '/vfs-probe') {
+      const { mkdir, writeFile, readdir } = await import('node:fs/promises')
+      const out = {}
+      for (const dir of ['/workspace', '/tmp/workspace', '/tmp/probe', '/bundle/x']) {
+        try {
+          await mkdir(dir, { recursive: true })
+          await writeFile(`${dir}/probe.txt`, 'ok')
+          out[dir] = { mkdir: true, write: true, entries: (await readdir(dir)).slice(0, 5) }
+        } catch (error) {
+          out[dir] = { ok: false, error: String(error?.message ?? error) }
+        }
+      }
+      try { out.root = (await readdir('/')).slice(0, 20) } catch (e) { out.root = String(e?.message ?? e) }
+      return Response.json(out)
+    }
+
+    if (url.pathname === '/persistence-probe') {
+      const { ctx } = await this.ensureTree()
+      const id = url.searchParams.get('id') ?? this.sessionId
+      const out = {}
+      // Which projection unit's view() returns undefined. snapshot() parses every
+      // registered unit's view through its schema, so one bad unit fails the
+      // whole snapshot and the error names neither the unit nor the key.
+      out.projections = (() => {
+        try {
+          const registry = ctx.get('sessionProjections')
+          const session = ctx.sessions.get(id)
+          if (!registry || !session) return { note: 'no registry or session not attached' }
+          const rows = []
+          for (const registration of registry.registrations.values()) {
+            const key = registration.def.key
+            try {
+              const cell = registry.cellFor(registration, session)
+              const view = registration.def.view(cell.state)
+              rows.push({ key, view: view === undefined ? 'UNDEFINED' : typeof view })
+            } catch (error) {
+              rows.push({ key, error: String(error?.message ?? error).slice(0, 200) })
+            }
+          }
+          return rows
+        } catch (error) {
+          return { error: String(error?.message ?? error) }
+        }
+      })()
+
+      out.rawHistory = await (async () => {
+        try {
+          return await this.api.sessions.history({ rpcId: 'raw', payload: { sessionId: id } })
+        } catch (error) {
+          return { threw: String(error?.message ?? error), stack: String(error?.stack ?? '').slice(0, 1200) }
+        }
+      })()
+      for (const [name, run] of [
+        ['list', () => ctx.sessionPersistence.list()],
+        ['inspect', () => ctx.sessionPersistence.inspect(id)],
+        ['readFrom', () => ctx.sessionPersistence.readFrom(id, 0)],
+        // The protocol call that keeps failing, invoked directly so the stack
+        // survives. The routed version reports only String(error), which for a
+        // schema failure prints the issues and hides the function that raised
+        // them -- the message names the symptom and nothing above it.
+        ['history', async () => {
+          const response = await this.api.sessions.history({ rpcId: 'probe', payload: { sessionId: id } })
+          if (response?.result?.ok === false) {
+            const err = new Error(response.result.error.message)
+            err.stack = JSON.stringify(response.result.error)
+            throw err
+          }
+          return response?.result?.value
+        }],
+      ]) {
+        try {
+          const value = await run()
+          out[name] = {
+            ok: true,
+            summary: Array.isArray(value)
+              ? { length: value.length, first: value[0] }
+              : { keys: Object.keys(value ?? {}), events: value?.events?.length, meta: value?.meta },
+          }
+        } catch (error) {
+          out[name] = { ok: false, error: String(error?.message ?? error), stack: String(error?.stack ?? '').slice(0, 900) }
+        }
+      }
+      return Response.json(out)
     }
 
     if (url.pathname === '/exec-selftest') {
@@ -484,18 +631,36 @@ export class SessionAgentDO extends DurableObject {
     // client paths, so the prefix goes back on here rather than U1 learning
     // which of its paths are protocol and which are ours.
     if (url.pathname !== '/') {
-      const { ctx } = await this.ensureTree()
-      if (!ctx.apiProxy) {
+      await this.ensureTree()
+      if (!this.api) {
         return Response.json({
           error: 'api-proxy-unavailable',
           hint: 'the client protocol service did not load; check /state for pending plugins and unmet injects',
         }, { status: 503 })
       }
+      // One method of fifty-two is ours, for an architectural difference rather
+      // than a preference.
+      //
+      // Upstream's session.create runs `mkdir(cwd, {recursive:true})` on the
+      // HOST filesystem, because in a local dsh the host and the execution
+      // world are the same machine. Here they are not: the Worker's virtual
+      // filesystem has exactly three entries -- bundle, tmp, dev -- and `mkdir
+      // /workspace` answers "operation not permitted", while the real workspace
+      // lives in a container reached over a service binding.
+      //
+      // The alternative was to move the workspace root under /tmp so the host
+      // mkdir would succeed. That buys a passing call and costs the thing worth
+      // having: one root, `/workspace`, that means the same path everywhere the
+      // agent looks.
+      if (url.pathname === '/session.create') {
+        return this.createSession(request)
+      }
+
       const forwarded = new Request(
         new URL(`/api${url.pathname}${url.search}`, url.origin),
         request,
       )
-      return toFetchHandler(ctx.apiProxy).fetch(forwarded)
+      return toFetchHandler(this.api).fetch(forwarded)
     }
 
     return Response.json(await this.snapshot())
@@ -569,8 +734,64 @@ export class SessionAgentDO extends DurableObject {
     const tOpen = Date.now()
     this.agent = persisted
       ? await ctx.agents.resume({ resumeSessionId: this.sessionId, agentOptions: chooseProvider(this.env, this.modelOverride, this.providerOverride) })
-      : await ctx.agents.create({ sessionId: this.sessionId, agentOptions: chooseProvider(this.env, this.modelOverride, this.providerOverride) })
+      : await ctx.agents.create({
+        sessionId: this.sessionId,
+        // The session's working directory, stamped on its creation header.
+        //
+        // Left unset the header is just {version, id, createdAt}, and upstream
+        // treats a session without a cwd as one that does not exist:
+        // inspectApiRemoteSession rejects it outright, the workspace registry
+        // has nothing to group it under, and the sandbox policy falls back to
+        // process.cwd(), which on workerd is `/bundle` -- a read-only VFS path
+        // that has nothing to do with the execution world.
+        meta: { cwd: WORKSPACE_ROOT },
+        agentOptions: chooseProvider(this.env, this.modelOverride, this.providerOverride),
+      })
     return { agent: this.agent.agent, openedMs: Date.now() - tOpen }
+  }
+
+  /**
+   * `session.create`, without the host-filesystem step. See the routing comment
+   * for why this one method is ours.
+   */
+  async createSession(request) {
+    let body
+    try {
+      body = await request.json()
+    } catch {
+      return new Response('body is not JSON', { status: 400 })
+    }
+    const rpcId = body?.rpcId ?? 'session.create'
+    const reply = (result) => Response.json({ type: 'server-response', rpcId, result })
+
+    const payload = body?.payload ?? {}
+    if (payload.agentPreset !== undefined) {
+      // Preset composition lives in upstream's create path, which this replaces.
+      // Refusing is the honest answer; quietly creating a session without the
+      // preset would look like it worked.
+      return reply({
+        ok: false,
+        error: { code: 'bad-request', message: 'agent presets are not supported by this deployment yet', details: {} },
+      })
+    }
+
+    const sessionId = payload.sessionId ?? `session-${crypto.randomUUID()}`
+    try {
+      const { ctx } = await this.ensureTree()
+      if (ctx.sessions.get(sessionId) === undefined) {
+        await ctx.agents.create({
+          sessionId,
+          meta: { cwd: WORKSPACE_ROOT },
+          agentOptions: chooseProvider(this.env, this.modelOverride, this.providerOverride),
+        })
+      }
+      return reply({ ok: true, value: { sessionId } })
+    } catch (error) {
+      return reply({
+        ok: false,
+        error: { code: 'internal', message: `failed to create session "${sessionId}": ${String(error?.message ?? error)}`, details: {} },
+      })
+    }
   }
 
   /** Drop the live agent so the next turn opens a clean one. */
