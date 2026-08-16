@@ -10,6 +10,11 @@
   // The session object is reached through U1 dsh-edge, never directly. Leaving
   // a *.workers.dev hostname on it would expose an unauthenticated agent.
   "workers_dev": false,
+  // Third-party plugin isolates (design 7, reopened). Each plugin runs as a
+  // dynamic Worker with its own isolate and no network of its own; the harness
+  // hands it a ctx stub over RPC.
+  "worker_loaders": [{ "binding": "LOADER" }],
+
   "durable_objects": {
     "bindings": [
       { "name": "SESSION", "class_name": "SessionAgentDO" }

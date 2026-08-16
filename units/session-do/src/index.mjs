@@ -8,7 +8,7 @@
 // Everything runs inside a handler, never at module scope: workerd forbids I/O,
 // timers and random-number generation in global scope, and constructing Cordis
 // services does all three.
-import { DurableObject } from 'cloudflare:workers'
+import { DurableObject, WorkerEntrypoint } from 'cloudflare:workers'
 import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { createApiProxy, toFetchHandler } from '@deepseek-ai/dsh-host-apiproxy'
@@ -521,6 +521,87 @@ export class SessionAgentDO extends DurableObject {
     // and the execution world share a filesystem; here they do not, and
     // session.create fails on a mkdir of the project directory. Which paths are
     // writable decides how that is fixed, so measure rather than assume.
+    // Can this account load a dynamic Worker at all, and can that Worker call
+    // BACK into us? Both halves matter: the first decides whether third-party
+    // plugins are possible, the second decides whether they can be written as
+    // ordinary Cordis plugins instead of as a second plugin model.
+    if (url.pathname === '/loader-probe') {
+      if (!this.env?.LOADER) {
+        return Response.json({ ok: false, error: 'no LOADER binding on this deployment' }, { status: 503 })
+      }
+      // What loopback surface does a Durable Object actually have? `ctx.exports`
+      // is the documented way to hand a dynamic Worker a capability, and a DO's
+      // state object is not the same thing as a Worker's ExecutionContext.
+      if (url.searchParams.get('introspect') === '1') {
+        const shape = (o) => {
+          if (!o) return null
+          const own = Object.getOwnPropertyNames(o)
+          const proto = Object.getOwnPropertyNames(Object.getPrototypeOf(o) ?? {})
+          return { own: own.slice(0, 25), proto: proto.slice(0, 25) }
+        }
+        return Response.json({
+          state: shape(this.state),
+          stateHasExports: Boolean(this.state?.exports),
+          thisCtx: shape(this.ctx),
+          thisCtxHasExports: Boolean(this.ctx?.exports),
+          exportsKeys: this.ctx?.exports ? Object.keys(this.ctx.exports) : null,
+        })
+      }
+
+      try {
+        const worker = this.env.LOADER.get('probe-v2', async () => ({
+          compatibilityDate: '2026-08-14',
+          mainModule: 'plugin.js',
+          modules: {
+            'plugin.js': `
+              export default {
+                async fetch(request, env) {
+                  // Call back into the host through a function passed by
+                  // reference -- this is the half that decides the plugin model.
+                  const echoed = await env.harness.echo('from the plugin isolate')
+                  // Actually attempt the network. Testing typeof fetch only
+                  // says the global exists, which it does even when every call
+                  // throws -- reporting that as "canFetch" would be a security
+                  // claim backed by nothing. (No backticks in here: this source
+                  // lives inside a template literal in the host file, and one
+                  // stray backtick closes it.)
+                  let network = 'unknown'
+                  try {
+                    const probe = await fetch('https://example.com/')
+                    network = 'REACHED THE NETWORK: HTTP ' + probe.status
+                  } catch (error) {
+                    network = 'blocked: ' + String(error?.message ?? error).slice(0, 80)
+                  }
+                  return Response.json({ ranInIsolate: true, hostSaid: echoed, network })
+                },
+              }
+            `,
+          },
+          env: {
+            // A capability, not a function: `env` takes structured-cloneable
+            // values and service bindings, and a bare closure is neither.
+            // `props` is how one capability serves many plugins: the stub is
+            // per-plugin, and the entrypoint reads `this.ctx.props` to know
+            // which one is calling. That is the hook a permission model hangs
+            // off later.
+            harness: this.ctx.exports.PluginHost({
+              props: { pluginId: 'probe-v2', sessionObject: this.sessionId },
+            }),
+          },
+          // No network of its own.
+          globalOutbound: null,
+        }))
+        const response = await worker.getEntrypoint().fetch(new Request('http://plugin/'))
+        return Response.json({ ok: true, status: response.status, body: await response.json() })
+      } catch (error) {
+        return Response.json({
+          ok: false,
+          error: String(error?.message ?? error),
+          stack: String(error?.stack ?? '').slice(0, 600),
+        })
+      }
+    }
+
     if (url.pathname === '/vfs-probe') {
       const { mkdir, writeFile, readdir } = await import('node:fs/promises')
       const out = {}
@@ -1468,6 +1549,25 @@ export class SessionAgentDO extends DurableObject {
           }
         : null,
     }
+  }
+}
+
+/**
+ * The surface a third-party plugin is given, and the ONLY one.
+ *
+ * A plugin runs in its own isolate with no network of its own, so everything it
+ * can reach is a method here. That makes this class the extension-point
+ * whitelist design 7.2 asked for — not as policy, but as the literal boundary:
+ * a capability that is not a method on this class does not exist for a plugin.
+ *
+ * It is a `WorkerEntrypoint` because that is what `ctx.exports` can hand across
+ * the loader boundary. Plain functions cannot: they fail to clone, which is how
+ * the first version of this probe found out.
+ */
+export class PluginHost extends WorkerEntrypoint {
+  /** Round-trip check that a plugin can call back into the harness at all. */
+  async echo(text) {
+    return `harness received: ${String(text)} (from plugin ${this.ctx?.props?.pluginId ?? 'unknown'})`
   }
 }
 
