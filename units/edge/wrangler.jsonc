@@ -7,7 +7,18 @@
 
   // Static assets and the API share one Worker on one origin, which removes
   // CORS and cross-origin WebSocket configuration entirely (design 8.3).
-  "assets": { "directory": "./public", "binding": "ASSETS" },
+  //
+  // `run_worker_first` lists the SPA document, and only it. By default the asset
+  // server answers a matching path BEFORE the Worker runs, so the Worker never
+  // saw `/` at all and the boot manifest it injects into index.html silently did
+  // not happen — the deploy succeeded, the page loaded, and nothing was
+  // rewritten. Every other file still short-circuits to the asset server, which
+  // is what should happen for 120 static files.
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/", "/index.html"]
+  },
 
   "durable_objects": {
     "bindings": [

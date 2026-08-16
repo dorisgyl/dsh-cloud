@@ -9,14 +9,18 @@
 // removes the entire CORS and cross-origin WebSocket problem rather than
 // configuring around it.
 import { identify, isConfigured, sessionObjectName } from '../../../packages/cf-identity/src/index.mjs'
+import BOOT_MANIFEST from '../build/boot-manifest.json'
 
 const API_PREFIX = '/api'
 
-// The UI transport is implemented now, by upstream's own dsh-host-apiproxy
-// inside U2 -- and it turned out not to be WebSockets at all: /api/events.mux
-// and /api/events.host are GET + Server-Sent Events, and everything else is
-// POST /api/<method>. So U1 has nothing special to do for them; they forward
-// like any other API path, and SSE streams back through unchanged.
+// The UI transport is implemented in U2, and it is BOTH shapes over one set of
+// paths. dsh-client-connection ships two client platforms: AbstractApiClient
+// reads /api/events.mux and /api/events.host as Server-Sent Events (the CLI and
+// automation entry, design 8.4), and WebApiClient — the browser — opens them as
+// WebSockets. U2 serves each accordingly.
+//
+// U1 has nothing special to do for either: both forward like any other API path,
+// and the upgrade passes through because the edge never terminates it.
 
 /** A session id the caller may choose, but only within its own shard. */
 function sessionIdFrom(url) {
@@ -34,6 +38,37 @@ const NOT_PROTECTED = {
     + 'or DEV_IDENTITY for local development.',
 }
 
+/** Only the SPA document gets rewritten; every other asset passes through. */
+function isIndexHtml(response) {
+  return response.ok && (response.headers.get('content-type') ?? '').startsWith('text/html')
+}
+
+/**
+ * Inject the boot manifest, and fix the one link that Access breaks.
+ *
+ * `<link rel="manifest">` is fetched WITHOUT credentials by default, so the
+ * cookie Access set never goes with it; Access then redirects the request to its
+ * login origin and the browser reports a CORS failure on a page that is signed
+ * in and working. `use-credentials` sends the cookie and the redirect never
+ * happens. Harmless on its own, but it is the loudest thing in the console and
+ * it points away from the real problem.
+ */
+function withBootManifest(response) {
+  return new HTMLRewriter()
+    .on('head', {
+      element(head) {
+        head.prepend(
+          `<script>window.__DSH_BOOT__ = ${JSON.stringify(BOOT_MANIFEST).replaceAll('<', '\\u003c')}</script>`,
+          { html: true },
+        )
+      },
+    })
+    .on('link[rel="manifest"]', {
+      element(link) { link.setAttribute('crossorigin', 'use-credentials') },
+    })
+    .transform(response)
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url)
@@ -41,7 +76,23 @@ export default {
     // Everything outside /api is the UI. Assets are public: Access, when
     // configured, has already gated the whole hostname in front of the Worker.
     if (!url.pathname.startsWith(API_PREFIX)) {
-      return env.ASSETS.fetch(request)
+      const response = await env.ASSETS.fetch(request)
+      // Whether the Worker saw this request at all, and what it decided. Asset
+      // requests can short-circuit to the asset server before the Worker runs,
+      // and when that happens a rewrite here simply does not occur — no error,
+      // no log, an unchanged page.
+      const trace = new Headers(response.headers)
+      trace.set('x-dsh-edge', isIndexHtml(response) ? 'rewriting' : `passthrough:${response.status}:${response.headers.get('content-type') ?? 'none'}`)
+      // The shell needs its plugin graph pushed into the page.
+      //
+      // dsh-web-frontend ships the compiled SHELL and nothing else — its
+      // dependencies are react, react-dom and dsh-client-web, not one
+      // dsh-client-* plugin — and its README is explicit that "composition is
+      // entirely the host graph's". Served verbatim, index.html throws
+      // "window.__DSH_BOOT__ is missing or not an object" before rendering a
+      // pixel, which is precisely what it did.
+      if (isIndexHtml(response)) return withBootManifest(new Response(response.body, { status: response.status, headers: trace }))
+      return new Response(response.body, { status: response.status, headers: trace })
     }
 
     // Distinguish the two ways identity can be missing. They are different

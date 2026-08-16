@@ -1,11 +1,14 @@
 // Bundle U1 and stage the UI it serves.
 //
-// The dsh web UI does not have to be built: upstream publishes the compiled SPA
-// in @deepseek-ai/dsh-web-frontend/dist — 89 files, 4.6 MB, index.html and all.
-// So U1 copies it into the assets directory rather than compiling 40 client
-// packages, and Workers Static Assets serves it from the same origin as /api,
-// which is what removes CORS and cross-origin WebSocket configuration entirely
-// (design 8.3).
+// Half the UI does not have to be built: upstream publishes the compiled SHELL
+// in @deepseek-ai/dsh-web-frontend/dist — index.html, the React shell, KaTeX
+// fonts and lazy syntax-highlight chunks. What it does NOT publish is the
+// composition: its dependencies are react, react-dom and dsh-client-web, not one
+// dsh-client-* plugin, and its README says so plainly — "composition is entirely
+// the host graph's". scripts/build-client.mjs stages that half.
+//
+// Workers Static Assets serves both from the same origin as /api, which is what
+// removes CORS and cross-origin WebSocket configuration entirely (design 8.3).
 import { cpSync, mkdirSync, rmSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -36,6 +39,10 @@ const bytes = (dir) => readdirSync(dir, { withFileTypes: true })
   .reduce((n, e) => n + (e.isDirectory() ? bytes(join(dir, e.name)) : statSync(join(dir, e.name)).size), 0)
 console.log(`ui: ${count(publicDir)} files, ${(bytes(publicDir) / 1048576).toFixed(1)} MB`)
 
+// --- the client plugin graph -------------------------------------------------
+// After the shell is staged, because it writes into the same public directory.
+await import('./build-client.mjs')
+
 // --- the Worker -------------------------------------------------------------
 await esbuild.build({
   entryPoints: [join(root, 'units/edge/src/index.mjs')],
@@ -44,6 +51,10 @@ await esbuild.build({
   platform: 'browser',
   conditions: ['workerd', 'worker', 'browser', 'import', 'module', 'default'],
   external: ['node:*', 'cloudflare:*'],
+  // The boot manifest is compiled into the Worker rather than fetched: it is a
+  // build artifact of the same build, and reading it at request time would add
+  // a subrequest to every page load for a file that cannot change between them.
+  loader: { '.json': 'json' },
   outfile: join(root, 'units/edge/build/edge.bundle.js'),
   logLevel: 'info',
 })
