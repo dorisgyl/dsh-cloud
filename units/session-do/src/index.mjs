@@ -213,6 +213,24 @@ export class SessionAgentDO extends DurableObject {
   }
 
   /**
+   * The container this object owns, named from the WHOLE Durable Object id.
+   *
+   * Not `sessionId`: that one truncates the id to 12 hex characters because it
+   * is a readable log key, and 48 bits is fine for a label. It is not fine for
+   * an isolation boundary — two users whose object ids happened to share a
+   * 12-character prefix would have shared one container, and with it one
+   * filesystem. The full id is 64 hex characters, well inside the sandbox id's
+   * 128-character limit, and costs nothing.
+   *
+   * Every session inside this object shares the container deliberately: one
+   * object is one user, and a user's sessions are meant to see each other's
+   * files.
+   */
+  get sandboxId() {
+    return `ws-${this.state.id.toString()}`
+  }
+
+  /**
    * Build the plugin tree once per Durable Object instance.
    * This cost is paid on every cold start and every hibernation wake.
    */
@@ -244,20 +262,20 @@ export class SessionAgentDO extends DurableObject {
         exec: this.env.EXEC,
         // One sandbox per session for now. A workspace outliving its session
         // (design 6.3) is the next step, and changes only this id.
-        sandboxId: this.sessionId,
+        sandboxId: this.sandboxId,
       })
       // Same binding, same sandbox: the shell and the filesystem must see one
       // execution world, or a file written by bash would be invisible to the
       // read tool.
       await ctx.plugin(CfFileSystem, {
         exec: this.env.EXEC,
-        sandboxId: this.sessionId,
+        sandboxId: this.sandboxId,
       })
       // The PTY seam. dsh-terminal-bash waits on `subprocess`, so registering
       // this is what makes the whole terminal stack come alive.
       await ctx.plugin(CfSubprocessService, {
         exec: this.env.EXEC,
-        sandboxId: this.sessionId,
+        sandboxId: this.sandboxId,
       })
       // A directory picker onto the execution world. Without an EXEC binding
       // there is no filesystem to browse, so the minimal tier registers none and
@@ -265,7 +283,7 @@ export class SessionAgentDO extends DurableObject {
       // offer one that answers nothing.
       await ctx.plugin(CfWorkspacePicker, {
         exec: this.env.EXEC,
-        sandboxId: this.sessionId,
+        sandboxId: this.sandboxId,
       })
     }
     // storageDomain publishes only once a named backend service exists.
@@ -812,7 +830,7 @@ export class SessionAgentDO extends DurableObject {
       const response = await this.env.EXEC.fetch('http://exec/fs', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ sandboxId: this.sessionId, cwd: WORKSPACE_ROOT, payload }),
+        body: JSON.stringify({ sandboxId: this.sandboxId, cwd: WORKSPACE_ROOT, payload }),
       })
       const body = await response.json()
       if (!body?.ok) throw new Error(String(body?.error ?? 'the execution world did not answer'))

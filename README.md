@@ -13,21 +13,49 @@ key; nothing here asks you to sign up for anything of ours.
 
 ## Status: work in progress
 
-M1 is partly done. What runs today, verified in real workerd:
+What runs today, verified against a real deployment:
 
 | | |
 |---|---|
 | Upstream agent tree assembles inside a Worker | yes — 88 packages, 266 ms |
-| One agent turn runs inside a Durable Object | yes |
+| Turns run in a Durable Object and survive the client leaving | yes |
 | Session log persists to Durable Object SQLite | yes |
-| Turns survive the client disconnecting | yes — `scripts/m1-disconnect-demo.mjs` |
 | Edge with Cloudflare Access and per-user sharding | yes |
 | A real model | yes — Workers AI, no API key |
-| Shell / files / terminal | **not yet** — that is M2 |
-| The dsh web UI | **not yet** — the edge serves a placeholder |
+| Shell — real commands in a Cloudflare container | yes |
+| Files — read / write / edit, same execution world as the shell | yes |
+| Terminal — a real PTY, state kept across turns | yes, but not the default `bash` (see `docs/M2-terminal.md`) |
+| The dsh web UI | yes — served, and its protocol works end to end |
+| Workspace files surviving container recycling | **no** — see Limitations |
 
-See `docs/M0-findings.md` and `docs/M1-step*.md` for what each step measured and
-what it overturned.
+See `docs/M0-findings.md`, `docs/M1-*.md`, `docs/M2-*.md` and `docs/M3-web-ui.md`
+for what each step measured and what it overturned. Several of those documents
+correct an earlier conclusion of their own; that is deliberate.
+
+## Limitations
+
+**Workspace files do not survive the container being recycled.** Cloudflare
+containers sleep and are reclaimed; `/workspace` then comes back fresh from the
+image. Files an agent wrote minutes earlier are simply gone, while the workspace
+*record* — which lives in Durable Object SQLite — is still there, pointing at a
+directory that no longer exists.
+
+A workspace is therefore useful **within the session that created it** and not
+beyond. Design 6.3 plans for this (a lease plus snapshot hibernation, which the
+Sandbox SDK's `createBackup`/`restoreBackup` would carry); it is not built. The
+web UI here is a demonstration, and this is the limit that matters most when
+treating it as more than that.
+
+**Every Access user is isolated, and that part is real.** The edge derives the
+Durable Object name entirely from verified Access claims —
+`tenant/<tenant>/user/<user>/session/<id>` — so each user gets their own object,
+its own SQLite, and its own container. A user cannot address another user's
+object: the caller contributes only the session segment, and only inside its own
+prefix. Sessions belonging to one user share that user's container deliberately.
+
+**One model, one region, no quotas.** There is no per-user rate limiting, no
+spend cap and no admission control. Opening a deployment to the public means
+paying for whatever it is asked to do.
 
 ## Tiers
 
