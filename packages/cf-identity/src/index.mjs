@@ -1,66 +1,108 @@
 // cf-identity — the edge's single identity convergence point.
 //
 // The front door is Cloudflare Access (ADR-07): part of the platform, free
-// below 50 users, no code, and — decisively — it asks the self-deployer to own
-// no account system of ours. Access authenticates before the request reaches
-// the Worker.
+// below 50 users, and — decisively — it asks the self-deployer to own no
+// account system of ours.
 //
-// Workers expose the authenticated identity as a first-class runtime API,
-// `ctx.access`, so there is no token to parse:
+// It must be a **hostname-based** Access application, not a Worker-level one,
+// because Worker-level policies do not support WebSockets and this app's entire
+// public surface is WebSockets. That constraint decides how identity arrives:
 //
-//   * `ctx.access` is `undefined` when Access did not authenticate the request
-//   * `ctx.access.getIdentity()` returns the signed-in user's claims
-//   * `ctx.access.aud` is the Access application's audience tag
+//   * Worker-level Access populates `ctx.access` and needs no token parsing —
+//     but breaks WebSocket upgrades with a 403.
+//   * Hostname-based Access leaves `ctx.access` **undefined** and forwards a
+//     signed assertion in `Cf-Access-Jwt-Assertion`, which the Worker verifies.
 //
-// An earlier version of this file verified the `CF_Authorization` JWT by hand
-// against the team's JWKS with `jose`. That worked, but it was strictly worse:
-// a dependency, a JWKS fetch (a subrequest whenever the cache is cold), two
-// configuration values to keep in sync, and a second code path for local
-// development that the deployed path never exercised.
-//
-// `ctx.access` is only available on the entry Worker's `fetch(request, env, ctx)`.
-// Inside a Durable Object `ctx` is the object's own state, so identity is
-// resolved once at the edge and carried downwards explicitly.
+// Both were measured against a live deployment, not assumed. `ctx.access` is
+// the nicer API and does not apply to us.
+import { createRemoteJWKSet, jwtVerify } from 'jose'
 
-/**
- * Resolve identity for a request from the Access runtime API.
- *
- * Local development uses the same API: `wrangler.jsonc` carries an
- * `access.dev` block that populates `ctx.access` without a login flow, so the
- * local and deployed code paths are identical rather than merely similar.
- *
- * @param ctx the entry Worker's execution context
- * @param env bindings, for the tenant name
- * @returns the internal claim set, or null when Access did not authenticate
- */
-export async function identify(ctx, env) {
-  if (!ctx?.access) return null
-  let identity
-  try {
-    identity = await ctx.access.getIdentity()
-  } catch {
-    return null
+const HEADER = 'cf-access-jwt-assertion'
+
+// createRemoteJWKSet caches fetched keys internally; cache the set per team so
+// a burst of requests does not refetch.
+const jwks = new Map()
+function keysFor(teamDomain) {
+  const url = `https://${teamDomain}/cdn-cgi/access/certs`
+  let set = jwks.get(url)
+  if (!set) {
+    set = createRemoteJWKSet(new URL(url))
+    jwks.set(url, set)
   }
-  return toInternalClaims(identity, { tenant: env?.TENANT, aud: ctx.access.aud })
+  return set
 }
 
 /**
- * Reduce Access's identity to `tenant` / `user` / `scopes`.
+ * Reduce a verified Access assertion to `tenant` / `user` / `scopes`.
  *
- * A self-deployed instance is one tenant, so `tenant` comes from configuration
- * rather than from the identity — a value the user controls must never choose
- * the shard.
+ * Access issues two shapes, and they differ in every field that matters:
+ *
+ *   human   { sub: "<uuid>", email: "you@example.com", type: "app" }
+ *   service { sub: "",       email: absent,            type: "app",
+ *             common_name: "<client-id>.access" }
+ *
+ * A service token authenticates a machine, so it has no e-mail and an empty
+ * subject; its identity is the token's client id. Mapping it to a `user` keeps
+ * automation inside its own shard instead of borrowing a person's.
+ *
+ * `tenant` comes from configuration, never from the token: a value the caller
+ * controls must not choose the shard.
  */
-export function toInternalClaims(identity, config = {}) {
-  const user = identity?.user_uuid || identity?.sub || identity?.email
+export function toInternalClaims(payload, config = {}) {
+  const service = !payload.sub && Boolean(payload.common_name)
+  const user = service ? payload.common_name : (payload.sub || payload.email)
   if (!user) return null
   return {
     tenant: config.tenant ?? 'default',
     user: String(user),
+    kind: service ? 'service' : 'user',
+    email: payload.email ?? null,
     scopes: ['session:read', 'session:write'],
-    email: identity?.email ?? null,
-    aud: config.aud ?? null,
+    exp: payload.exp ?? null,
   }
+}
+
+/**
+ * Resolve identity for a request.
+ *
+ * `DEV_IDENTITY` covers local development, where no Access sits in front of
+ * `wrangler dev`. It is ignored whenever Access is configured, so a deployed
+ * instance cannot fall back into it by leaving a variable set.
+ */
+export async function identify(request, env) {
+  const teamDomain = env?.ACCESS_TEAM_DOMAIN
+  const aud = env?.ACCESS_AUD
+
+  if (teamDomain && aud) {
+    const token = request.headers.get(HEADER)
+    if (!token) return null
+    try {
+      const { payload } = await jwtVerify(token, keysFor(teamDomain), {
+        issuer: `https://${teamDomain}`,
+        audience: aud,
+      })
+      return toInternalClaims(payload, { tenant: env.TENANT })
+    } catch {
+      return null
+    }
+  }
+
+  if (env?.DEV_IDENTITY) {
+    return {
+      tenant: env.TENANT ?? 'default',
+      user: env.DEV_IDENTITY,
+      kind: 'user',
+      email: null,
+      scopes: ['session:read', 'session:write'],
+      exp: null,
+    }
+  }
+  return null
+}
+
+/** True when the deployment has an identity source at all. */
+export function isConfigured(env) {
+  return Boolean((env?.ACCESS_TEAM_DOMAIN && env?.ACCESS_AUD) || env?.DEV_IDENTITY)
 }
 
 /**

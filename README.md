@@ -81,8 +81,20 @@ on the account.
 Create it in **Zero Trust → Access → Applications → Self-hosted**, with your
 deployment's hostname as the application domain. Add an `Allow` policy for
 whoever should sign in. For machine access — CI, scripted tests — add a second
-policy with **Action: Service Auth** and a service token; that option exists
-only in the full Zero Trust editor, not in the Workers dashboard panel.
+policy with **Action: Service Auth** and a service token. (The `Service Token`
+selector only appears once the action is `Service Auth`, which is easy to miss.)
+
+Then point the edge at that application:
+
+```bash
+npx wrangler secret put ACCESS_TEAM_DOMAIN   # <your-team>.cloudflareaccess.com
+npx wrangler secret put ACCESS_AUD           # the application's AUD tag
+```
+
+The edge verifies the assertion, reduces it to `tenant` / `user` / `scopes`, and
+derives every Durable Object name from it — a client never supplies any part of
+the name, so it cannot address another user's session. Human logins and service
+tokens are both accepted and get separate shards.
 
 There is nothing to configure in code. Access authenticates before the request
 reaches the Worker, and the identity arrives as a runtime API:

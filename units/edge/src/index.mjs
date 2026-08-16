@@ -8,7 +8,7 @@
 // Static assets and the API share one Worker on one origin (design 8.3), which
 // removes the entire CORS and cross-origin WebSocket problem rather than
 // configuring around it.
-import { identify, sessionObjectName } from '../../../packages/cf-identity/src/index.mjs'
+import { identify, isConfigured, sessionObjectName } from '../../../packages/cf-identity/src/index.mjs'
 
 const API_PREFIX = '/api'
 
@@ -23,12 +23,13 @@ function sessionIdFrom(url) {
 // bare 401 wastes the self-deployer's afternoon.
 const NOT_PROTECTED = {
   error: 'access-not-configured',
-  hint: 'Protect this Worker with Cloudflare Access (Workers dashboard > Access), '
-    + 'or add an access.dev block to wrangler.jsonc for local development.',
+  hint: 'Set ACCESS_TEAM_DOMAIN and ACCESS_AUD from a hostname-based Cloudflare '
+    + 'Access application (Zero Trust > Access > Applications > Self-hosted), '
+    + 'or DEV_IDENTITY for local development.',
 }
 
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request, env) {
     const url = new URL(request.url)
 
     // Everything outside /api is the UI. Assets are public: Access, when
@@ -37,13 +38,21 @@ export default {
       return env.ASSETS.fetch(request)
     }
 
-    const claims = await identify(ctx, env)
-    if (!claims) return Response.json(NOT_PROTECTED, { status: 403 })
+    // Distinguish the two ways identity can be missing. They are different
+    // problems with different fixes, and answering both with one 403 sent this
+    // deployment on a long detour.
+    // Two different problems with two different fixes: an unprotected
+    // deployment, and a request that simply is not signed in. Answering both
+    // with one 403 sent this deployment on a long detour.
+    if (!isConfigured(env)) return Response.json(NOT_PROTECTED, { status: 503 })
+
+    const claims = await identify(request, env)
+    if (!claims) return Response.json({ error: 'unauthorized' }, { status: 401 })
 
     if (url.pathname === `${API_PREFIX}/whoami`) {
       return Response.json({
-        tenant: claims.tenant, user: claims.user, scopes: claims.scopes,
-        email: claims.email, aud: claims.aud,
+        tenant: claims.tenant, user: claims.user, kind: claims.kind,
+        email: claims.email, scopes: claims.scopes,
       })
     }
 

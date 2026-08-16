@@ -16,19 +16,17 @@
   },
 
   "vars": {
-    "TENANT": "default"
-  },
+    "TENANT": "default",
 
-  // Local development populates `ctx.access` with the same shape production
-  // does, so there is no separate unauthenticated code path to keep in sync.
-  // Delete this block to test what an unprotected request sees.
-  // In production, protect the Worker from the Workers dashboard (Access tab)
-  // — nothing here changes.
-  "access": {
-    "dev": {
-      "aud": "dsh-cloud-dev",
-      "identity": { "email": "dev@localhost" }
-    }
+    // From the hostname-based Access application (Zero Trust > Access >
+    // Applications > Self-hosted). Worker-level Access would populate
+    // `ctx.access` and need none of this, but it breaks WebSocket upgrades —
+    // measured, see docs/M1-access.md.
+    "ACCESS_TEAM_DOMAIN": "yellow-rain-3570.cloudflareaccess.com",
+    "ACCESS_AUD": "71566fd1b03df3cdf0afbfcf3e6ecbd73b3535fded3a6bdff146a2e8e6cde6c4"
+
+    // Local development sets DEV_IDENTITY instead; it is ignored whenever the
+    // two values above are present, so a deployment cannot fall back into it.
   }
 
   // `workers_dev` is deliberately absent. *.workers.dev is blocked outright on
