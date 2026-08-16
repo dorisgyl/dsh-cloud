@@ -15,10 +15,43 @@ import { fsCommand } from './fs-script.mjs'
 // Required by the SDK: the container class must be exported from the entry.
 export { Sandbox } from '@cloudflare/sandbox'
 
-/** Every workspace is one sandbox; the id is the workspace's identity. */
+/**
+ * Every workspace is one sandbox; the id is the workspace's identity.
+ *
+ * The rules are the SDK's, read from `sanitizeSandboxId`, and they are DNS
+ * label rules: at most 63 characters, no leading or trailing hyphen. This check
+ * used to allow 128 characters — a number invented here — so an over-long id
+ * passed our validation and failed inside the SDK on every single tool call,
+ * with a message that named the platform rather than the caller. A guard that
+ * enforces a limit of its own invention is worse than no guard: it reports
+ * agreement it never checked.
+ */
+const MAX_SANDBOX_ID = 63
+
+/**
+ * How long a container stays awake after its last request.
+ *
+ * The SDK's default is 10 minutes, and a `lite` instance costs $0.000002015 per
+ * second — so an idle window is $0.0012 at ten minutes and $0.0006 at five.
+ * Neither is much: the Workers Paid plan includes 375 vCPU-minutes, 25 GiB-hours
+ * and 200 GB-hours per month, which for `lite` all work out to the same 100
+ * hours of runtime, or 600 ten-minute windows.
+ *
+ * Five minutes is a deliberate trade, not an optimisation: it halves the idle
+ * window at the price of a cold start whenever a user pauses longer than that.
+ * The cold start has not been measured, which is the honest caveat on this
+ * number.
+ */
+const SLEEP_AFTER = '5m'
+
 function sandboxFor(env, id) {
-  if (!id || !/^[A-Za-z0-9._-]{1,128}$/.test(id)) throw new Error('invalid sandbox id')
-  return getSandbox(env.Sandbox, id)
+  if (!id || id.length > MAX_SANDBOX_ID) {
+    throw new Error(`sandbox id must be 1-${MAX_SANDBOX_ID} characters (DNS label); got ${id ? id.length : 0}`)
+  }
+  if (!/^[A-Za-z0-9._][A-Za-z0-9._-]*[A-Za-z0-9._]$|^[A-Za-z0-9._]$/.test(id)) {
+    throw new Error(`sandbox id must be DNS-safe and must not start or end with a hyphen: "${id}"`)
+  }
+  return getSandbox(env.Sandbox, id, { sleepAfter: SLEEP_AFTER })
 }
 
 /**

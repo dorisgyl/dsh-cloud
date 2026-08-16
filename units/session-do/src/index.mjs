@@ -219,15 +219,21 @@ export class SessionAgentDO extends DurableObject {
    * is a readable log key, and 48 bits is fine for a label. It is not fine for
    * an isolation boundary — two users whose object ids happened to share a
    * 12-character prefix would have shared one container, and with it one
-   * filesystem. The full id is 64 hex characters, well inside the sandbox id's
-   * 128-character limit, and costs nothing.
+   * filesystem.
    *
-   * Every session inside this object shares the container deliberately: one
-   * object is one user, and a user's sessions are meant to see each other's
-   * files.
+   * 60 hex characters, not 64: a sandbox id is a DNS LABEL, so the real limit
+   * is 63 and `ws-` plus a whole object id is 67. The first version of this
+   * used the whole id, checked it against a 128-character regex, and shipped —
+   * and that regex was ours, invented in U5, not the platform's. Every tool
+   * call then failed with "Sandbox ID must be 1-63 characters long." Validating
+   * against a limit you made up proves nothing about the one that applies.
+   *
+   * 240 bits is still far past any collision that matters. Every session inside
+   * this object shares the container deliberately: one object is one user, and
+   * a user's sessions are meant to see each other's files.
    */
   get sandboxId() {
-    return `ws-${this.state.id.toString()}`
+    return `ws-${this.state.id.toString().slice(0, 60)}`
   }
 
   /**

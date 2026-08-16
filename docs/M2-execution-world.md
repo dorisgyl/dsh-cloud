@@ -122,16 +122,41 @@ but the cause and the fix never change.
 (design 6.5's "default tier"), with a SQLite table for the per-tenant tier that
 is still deferred.
 
+> The three items this section used to list — background processes, the fs
+> tools, and workspace lifetime — are settled elsewhere. `fs` and the PTY are
+> done (`M2-terminal.md`); the container itself is now named from the whole
+> Durable Object id, so it is one per USER rather than per session, which is the
+> grain design 6.3 wants. What remains of 6.3 is the lease and the hibernation,
+> below.
+
+## Cold start, measured — and an earlier note here was wrong
+
+This document used to say "the first command on a new sandbox took long enough
+to exceed a 90-second polling window", which read as a cold-start figure. It was
+not one. That run was the image/SDK version mismatch above, compounded by a dead
+shell; cold start was never involved.
+
+Forcing a fresh container by using a sandbox id that has never been seen:
+
+| | cold | warm |
+|---|---:|---:|
+| after a redeploy | 3073 ms | 814 ms |
+| fresh id | 2908 ms | 826 ms |
+| fresh id | 4512 ms | 990 ms |
+
+**Roughly 3–4.5 s cold, 0.8–1.0 s warm.** Using a fresh id is what makes this
+repeatable — there is no need to wait out a sleep window to measure it again.
+
+The container sleeps 5 minutes after its last request (`SLEEP_AFTER` in
+`units/exec/src/index.mjs`; the SDK's default is 10). So a user who pauses
+longer than five minutes pays about three seconds on their next command, and one
+who keeps working never sees it.
+
 ## Not done
 
-- **Background processes** (`start`), and with them the terminal seam and
-  `dsh-tool-bash-persistent`.
-- **The fs tools.** The seam's granularity is now known and the provider pattern
-  is proven; `dsh-tool-fs`, `dsh-tool-fs-search` and `dsh-tool-str-replace-editor`
-  need the `fs` provider written the same way as `shell`.
-- **Workspace lifetime.** One sandbox per session today. Design 6.3 wants a
-  workspace that outlives its session, with a lease and snapshot hibernation;
-  that changes only the sandbox id and the code around it.
-- **Cold start.** The first command on a new sandbox took long enough to exceed
-  a 90-second polling window. It is not measured, and it is what a user feels
-  first.
+- **Workspace files do not survive the container being recycled**, which makes a
+  workspace useful only within the session that created it. Measured the hard
+  way: `/workspace` came back empty carrying the image's own build timestamp,
+  while the workspace record in Durable Object SQLite still pointed at it. Two
+  storage layers, two lifetimes, nothing reconciling them. Design 6.3's lease
+  and snapshot hibernation is where that stops being true.
