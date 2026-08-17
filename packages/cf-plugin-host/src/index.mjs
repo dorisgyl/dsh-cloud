@@ -56,11 +56,19 @@ function revOf(source) {
 }
 
 export class PluginRegistry {
-  constructor({ sql, loader, capability, compatibilityDate = '2026-08-14' }) {
+  /**
+   * @param deploymentRows - optional async source of plugins installed for the
+   *   WHOLE deployment. They live in another Durable Object, because this one
+   *   is per user: the registry was per-object from the start, which meant an
+   *   operator could not provision a plugin for anyone but themselves. That was
+   *   a side effect of per-user isolation rather than a decision anyone made.
+   */
+  constructor({ sql, loader, capability, deploymentRows, compatibilityDate = '2026-08-14' }) {
     if (!sql) throw new Error('cf-plugin-host requires the Durable Object SQLite handle')
     this.sql = sql
     this.loader = loader
     this.capability = capability
+    this.deploymentRows = deploymentRows
     this.compatibilityDate = compatibilityDate
     this.sql.exec(SCHEMA)
 
@@ -180,12 +188,12 @@ export class PluginRegistry {
    * renders that as a null phase rather than a fabricated lifecycle.
    */
   *inventoryEntries() {
-    for (const row of this.list()) {
+    for (const row of this.resolved ?? this.list()) {
       yield {
         id: `plugin:${row.id}`,
         disabled: !row.enabled,
         fiber: undefined,
-        options: { name: `${row.id} (third-party, rev ${row.rev})` },
+        options: { name: `${row.id} (${row.scope ?? 'user'}, rev ${row.rev})` },
       }
     }
   }
@@ -205,13 +213,35 @@ export class PluginRegistry {
    * each invocation re-enters the plugin, which is cheap: `apply` only
    * registers.
    */
+  /**
+   * Deployment plugins first, then this user's, with the user's winning on id.
+   *
+   * The override direction is the one that keeps a deployment usable: an
+   * operator provisions a plugin for everyone, and a user who has their own
+   * version of it gets theirs. The reverse would let a deployment-wide install
+   * silently replace something a user is relying on.
+   */
+  async resolveRows() {
+    const byId = new Map()
+    for (const row of (await this.deploymentRows?.()) ?? []) {
+      byId.set(row.id, { ...row, scope: 'deployment' })
+    }
+    for (const summary of this.list()) {
+      byId.set(summary.id, { ...this.row(summary.id), scope: 'user' })
+    }
+    return [...byId.values()]
+  }
+
   async attachTools(ctx) {
     const attached = []
     const failures = []
 
-    for (const summary of this.list()) {
-      if (!summary.enabled) continue
-      const row = this.row(summary.id)
+    // Kept so the inventory can describe what actually attached, including the
+    // deployment-level rows this object does not store.
+    this.resolved = await this.resolveRows()
+
+    for (const row of this.resolved) {
+      if (!row.enabled) continue
       let described
       try {
         described = await this.call(row, '/describe')
@@ -253,7 +283,7 @@ export class PluginRegistry {
               render: (_args, value) => [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value, null, 2) }],
             },
             execute: async (args) => {
-              const result = await this.call(this.row(row.id), '/execute', { name: schema.name, args })
+              const result = await this.call(row, '/execute', { name: schema.name, args })
               if (!result?.ok) throw new Error(`plugin "${row.id}": ${result?.error ?? 'tool failed'}`)
               return result.value
             },
@@ -278,7 +308,7 @@ export class PluginRegistry {
             // crosses. The plugin gets the raw input, which is the part that is
             // data, and returns a CommandResult the harness shapes.
             handler: async (invocation) => {
-              const result = await this.call(this.row(row.id), '/execute', {
+              const result = await this.call(row, '/execute', {
                 kind: 'command',
                 name: schema.name,
                 args: { rawInput: invocation?.rawInput ?? '' },
@@ -309,7 +339,7 @@ export class PluginRegistry {
         try {
           let text = String(schema.text ?? '')
           if (schema.dynamic) {
-            const result = await this.call(this.row(row.id), '/section', {
+            const result = await this.call(row, '/section', {
               name: schema.name,
               // Only what crosses as data, and deliberately little of it: a
               // section gets no handle on the agent it is decorating.

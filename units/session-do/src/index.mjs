@@ -154,6 +154,20 @@ const WORKSPACE_ROOT = '/workspace'
 /** Cordis fiber states are numeric; 2 is the loaded, running one. */
 const ACTIVE_FIBER = 2
 
+/**
+ * The one object that holds plugins installed for the WHOLE deployment.
+ *
+ * Same class, fixed name: a session object is per user by construction (its
+ * name is derived from verified Access claims), so a plugin installed in one is
+ * invisible to everyone else. That is right for isolation and wrong for
+ * provisioning — an operator installing a plugin means installing it for the
+ * deployment, not for their own account.
+ *
+ * A user cannot address this object: U1 builds every object name out of claims,
+ * and this name comes from none. Only a session object reaches it, server-side.
+ */
+const deploymentStoreName = (tenant) => `tenant/${tenant}/plugins`
+
 // Config for plugins whose schema has required fields. cf-settings-do will
 // supply these from TenantDO once it exists.
 const CONFIG = {
@@ -274,6 +288,18 @@ export class SessionAgentDO extends DurableObject {
     this.agent = null
   }
 
+  /**
+   * The tenant this object belongs to.
+   *
+   * Read from the header U1 sets out of verified claims, and remembered,
+   * because an alarm or a hibernated socket wakes with no request to read it
+   * from. It cannot be spoofed by a client: U1 overwrites the header on every
+   * forwarded request, and nothing else can reach this object.
+   */
+  get tenant() {
+    return this.tenantId ?? 'default'
+  }
+
   get sessionId() {
     return `m1-${this.state.id.toString().slice(0, 12)}`
   }
@@ -314,6 +340,25 @@ export class SessionAgentDO extends DurableObject {
     this.plugins = new PluginRegistry({
       sql: this.sql,
       loader: this.env?.LOADER,
+      // Deployment-wide plugins, fetched from the shared store. Skipped when
+      // THIS object is the store, which would otherwise ask itself.
+      deploymentRows: async () => {
+        try {
+          const name = deploymentStoreName(this.tenant)
+          const id = this.env.SESSION.idFromName(name)
+          if (id.toString() === this.state.id.toString()) return []
+          const response = await this.env.SESSION.get(id).fetch('http://session/plugin-store', {
+            headers: { 'x-dsh-tenant': this.tenant },
+          })
+          const body = await response.json()
+          return body?.rows ?? []
+        } catch (error) {
+          // A store that cannot be read must not stop a session from booting:
+          // the user's own plugins, and the harness itself, do not depend on it.
+          this.lateErrors?.push({ specifier: 'deployment-plugins', error: String(error?.message ?? error) })
+          return []
+        }
+      },
       capability: (pluginId, permissions) => this.ctx.exports.PluginHost({
         props: {
           pluginId,
@@ -527,6 +572,7 @@ export class SessionAgentDO extends DurableObject {
 
   async fetch(request) {
     const url = new URL(request.url)
+    this.tenantId = request.headers.get('x-dsh-tenant') ?? this.tenantId
 
     // The browser's two downlinks, which are WebSockets and NOT the socket
     // below.
@@ -636,6 +682,34 @@ export class SessionAgentDO extends DurableObject {
     // BACK into us? Both halves matter: the first decides whether third-party
     // plugins are possible, the second decides whether they can be written as
     // ordinary Cordis plugins instead of as a second plugin model.
+    // The raw plugin table of THIS object, with sources.
+    //
+    // Deliberately does not build the tree: the deployment store is a store,
+    // and making it assemble ninety plugins to answer a list would turn one
+    // shared object into the slowest thing in every boot.
+    if (url.pathname === '/plugin-store') {
+      const store = this.pluginStore()
+      if (request.method === 'GET') {
+        return Response.json({ rows: store.list().map((row) => store.row(row.id)) })
+      }
+      if (request.method === 'POST') {
+        let body
+        try { body = await request.json() } catch { return Response.json({ error: 'body is not JSON' }, { status: 400 }) }
+        try {
+          return Response.json({ installed: store.install(body?.id, body?.source, body?.permissions) })
+        } catch (error) {
+          return Response.json({ error: String(error?.message ?? error) }, { status: 400 })
+        }
+      }
+      if (request.method === 'DELETE') {
+        const id = url.searchParams.get('id')
+        if (!id) return Response.json({ error: 'id is required' }, { status: 400 })
+        store.remove(id)
+        return Response.json({ removed: id })
+      }
+      return Response.json({ error: 'use GET, POST or DELETE' }, { status: 405 })
+    }
+
     // Installing, listing and removing third-party plugins.
     //
     // A deliberately plain surface: the point of this milestone is that a
@@ -651,12 +725,33 @@ export class SessionAgentDO extends DurableObject {
       }
 
       if (request.method === 'GET') {
-        return Response.json({ installed: this.plugins.list(), ...(this.pluginReport ?? {}) })
+        // Both scopes, each labelled, and the source omitted. Listing only this
+        // user's rows would answer "what plugins do I have" with a list that
+        // contradicts the tools actually registered, which is the shape of bug
+        // this whole file keeps running into: a report that is green about a
+        // world it cannot see.
+        const resolved = (await this.plugins.resolveRows()).map(({ source, ...row }) => ({
+          ...row,
+          enabled: Boolean(row.enabled),
+          bytes: source?.length,
+        }))
+        return Response.json({ installed: resolved, ...(this.pluginReport ?? {}) })
       }
 
       if (request.method === 'DELETE') {
         const id = url.searchParams.get('id')
         if (!id) return Response.json({ error: 'id is required' }, { status: 400 })
+        if (url.searchParams.get('scope') === 'deployment') {
+          const refusal = this.refuseUnlessAdmin(request)
+          if (refusal) return refusal
+          const store = this.env.SESSION.get(this.env.SESSION.idFromName(deploymentStoreName(this.tenant)))
+          const response = await store.fetch(`http://session/plugin-store?id=${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+            headers: { 'x-dsh-tenant': this.tenant },
+          })
+          this.tree = null
+          return Response.json({ scope: 'deployment', ...(await response.json()) }, { status: response.status })
+        }
         this.plugins.remove(id)
         // The tree holds tools registered from the old source, so it is stale
         // the moment a plugin changes. Dropping it is cheaper and more honest
@@ -672,10 +767,29 @@ export class SessionAgentDO extends DurableObject {
         } catch {
           return Response.json({ error: 'body is not JSON' }, { status: 400 })
         }
+
+        // `?scope=deployment` installs for everyone, and is the one operation
+        // here that affects other people — so it is the one that needs saying
+        // who may do it. With ADMIN_USERS unset it is refused rather than
+        // allowed: a deployment that has not named its operators has not
+        // decided, and defaulting to "anyone" would decide for it.
+        if (url.searchParams.get('scope') === 'deployment') {
+          const refusal = this.refuseUnlessAdmin(request)
+          if (refusal) return refusal
+          const store = this.env.SESSION.get(this.env.SESSION.idFromName(deploymentStoreName(this.tenant)))
+          const response = await store.fetch('http://session/plugin-store', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-dsh-tenant': this.tenant },
+            body: JSON.stringify(body),
+          })
+          this.tree = null
+          return Response.json({ scope: 'deployment', ...(await response.json()) }, { status: response.status })
+        }
+
         try {
           const installed = this.plugins.install(body?.id, body?.source, body?.permissions)
           this.tree = null
-          return Response.json({ installed })
+          return Response.json({ scope: 'user', installed })
         } catch (error) {
           return Response.json({ error: String(error?.message ?? error) }, { status: 400 })
         }
@@ -1421,6 +1535,41 @@ export class SessionAgentDO extends DurableObject {
     }
 
     return reply({ ok: true, value: { sessionId } })
+  }
+
+  /** A registry over this object's own table, with no loading side. */
+  pluginStore() {
+    this.store ??= new PluginRegistry({ sql: this.sql })
+    return this.store
+  }
+
+  /**
+   * Deployment-scope writes, gated on an explicit operator list.
+   *
+   * `ADMIN_USERS` holds Access user ids or emails, comma separated. Unset means
+   * refuse: the alternative default is "any signed-in user may install code for
+   * every other user", which is not a default anyone should get by omission.
+   */
+  refuseUnlessAdmin(request) {
+    const admins = String(this.env?.ADMIN_USERS ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+    if (admins.length === 0) {
+      return Response.json({
+        error: 'deployment-scope-not-configured',
+        hint: 'Set ADMIN_USERS in units/session-do/wrangler.jsonc to the Access user ids or emails allowed '
+          + 'to install plugins for every user of this deployment, then redeploy.',
+      }, { status: 403 })
+    }
+    // Either identifier matches: the Access subject, which is what object names
+    // are built from, or the email, which is what an operator can actually type.
+    const user = request.headers.get('x-dsh-user')
+    const email = request.headers.get('x-dsh-email')
+    if (!admins.some((admin) => admin === user || (email && admin === email))) {
+      return Response.json({
+        error: 'not-an-admin',
+        hint: `"${email || user || 'unknown'}" is not in ADMIN_USERS; deployment-wide installs are refused.`,
+      }, { status: 403 })
+    }
+    return undefined
   }
 
   /** Drop the live agent so the next turn opens a clean one. */

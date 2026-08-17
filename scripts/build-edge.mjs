@@ -39,6 +39,18 @@ const bytes = (dir) => readdirSync(dir, { withFileTypes: true })
   .reduce((n, e) => n + (e.isDirectory() ? bytes(join(dir, e.name)) : statSync(join(dir, e.name)).size), 0)
 console.log(`ui: ${count(publicDir)} files, ${(bytes(publicDir) / 1048576).toFixed(1)} MB`)
 
+// --- example plugins ---------------------------------------------------------
+// Served so that installing one is a two-line paste rather than a 2 KB blob:
+//   const source = await fetch('/examples/notes-plugin.js').then(r => r.text())
+//   await fetch('/api/plugins', { method: 'POST', ... })
+// They are examples, not defaults: nothing installs them.
+const examples = join(root, 'examples')
+if (existsSync(examples)) {
+  mkdirSync(join(publicDir, 'examples'), { recursive: true })
+  cpSync(examples, join(publicDir, 'examples'), { recursive: true, force: true })
+  console.log(`examples: ${readdirSync(examples).length} plugin(s)`)
+}
+
 // --- the client plugin graph -------------------------------------------------
 // After the shell is staged, because it writes into the same public directory.
 await import('./build-client.mjs')

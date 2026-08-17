@@ -13,6 +13,17 @@
   // Third-party plugin isolates (design 7, reopened). Each plugin runs as a
   // dynamic Worker with its own isolate and no network of its own; the harness
   // hands it a ctx stub over RPC.
+  // ADMIN_USERS -- who may install a plugin for EVERY user of this deployment.
+  // Deliberately not declared here: a var declared in this file is rewritten on
+  // every deploy, so an operator list belongs in a secret that survives one.
+  //
+  //   echo "you@example.com" | npx wrangler secret put ADMIN_USERS
+  //
+  // Access subjects or emails, comma separated. Unset means nobody, and
+  // deployment-scope installs are refused saying so -- the alternative default
+  // is "any signed-in user may install code for every other user", which is not
+  // something a deployment should get by omission.
+
   "worker_loaders": [{ "binding": "LOADER" }],
 
   "durable_objects": {

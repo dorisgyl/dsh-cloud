@@ -151,6 +151,74 @@ So: **a plugin can extend the harness's periphery and cannot reach its core.**
 That is the honest summary of the difference from "everything is a plugin"
 upstream — not a smaller number of hooks, but a boundary at the agent loop.
 
+## Two scopes: the deployment's and yours
+
+A plugin installed through `/api/plugins` was, at first, visible to exactly one
+person — and nobody decided that. Session objects are named from verified Access
+claims (`tenant/<t>/user/<u>/session/<s>`), so the plugin table is per user by
+construction. It surfaced the way this kind of thing does: a plugin installed
+with a service token registered its tools and ran, and the same deployment's web
+UI listed sixty-eight plugins and not that one. Two objects, two tables, one
+install.
+
+Per-user is right for isolation and wrong for provisioning. An operator
+installing a plugin means installing it *for the deployment*.
+
+```
+POST /api/plugins                      -> this user only
+POST /api/plugins?scope=deployment     -> everyone, admins only
+GET  /api/plugins                      -> both, each row labelled with its scope
+```
+
+Deployment-level plugins live in one more object of the same class, addressed by
+a fixed name:
+
+```
+tenant/<tenant>/plugins
+```
+
+A client cannot reach it. Every object name a request can produce is built out
+of claims by U1, and this name is built out of none of them; only a session
+object addresses it, server-side, over the `SESSION` binding it already has.
+It is design's U3 in miniature — a shared object per tenant — without a new
+Worker, a new binding or a new deploy target.
+
+**The user's row wins on id.** An operator provisions `notes` for everyone; a
+user who has their own `notes` keeps theirs. The other direction would let a
+deployment-wide install silently replace something a user was relying on.
+
+**A store is a store.** `/plugin-store` reads and writes the table without
+building the agent tree — one shared object assembling ninety plugins to answer
+a list would become the slowest thing in every session's boot.
+
+**An unreadable store does not stop a session.** The fetch is wrapped; a failure
+lands in `lateErrors` and the session boots with the user's own plugins. Nothing
+in the harness depends on the shared object existing.
+
+### Who may install for everyone
+
+The one operation here that affects other people is the one that needs saying
+who may do it:
+
+```sh
+echo "you@example.com" | npx wrangler secret put ADMIN_USERS
+```
+
+A secret, not a `var`, because a var declared in `wrangler.jsonc` is rewritten on
+every deploy and an operator list should survive one. Access subjects or emails,
+comma separated; U1 forwards both (`x-dsh-user` is the subject that object names
+are built from, `x-dsh-email` is the one a human can type).
+
+**Unset means nobody**, and the refusal says so:
+
+```json
+{"error": "deployment-scope-not-configured",
+ "hint": "Set ADMIN_USERS ... then redeploy."}
+```
+
+The alternative default is "any signed-in user may install code for every other
+user of this deployment". That is not something anyone should get by omission.
+
 ## Not done
 - **No signing, no provenance, no versioning beyond a content hash.** Installing
   a plugin means trusting whoever wrote it, and today the only real fence is

@@ -133,6 +133,12 @@ export default {
     )
     forwarded.headers.set('x-dsh-tenant', claims.tenant)
     forwarded.headers.set('x-dsh-user', claims.user)
+    // The email is not identity here -- `user` is, and object names are built
+    // from it. This is carried only so a human-readable operator list is
+    // possible: `claims.user` is an Access subject UUID, and asking a
+    // self-deployer to paste one into their config to name themselves an admin
+    // is a worse door than their own address.
+    if (claims.email) forwarded.headers.set('x-dsh-email', claims.email)
     return stub.fetch(forwarded)
   },
 }
