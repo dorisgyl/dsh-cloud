@@ -23,6 +23,7 @@ import { CfSettingsDo } from '../../../packages/cf-settings-do/src/index.mjs'
 import { CfShellExecutor } from '../../../packages/cf-exec-provider/src/shell.mjs'
 import { CfFileSystem } from '../../../packages/cf-exec-provider/src/fs.mjs'
 import { CfSubprocessService } from '../../../packages/cf-exec-provider/src/subprocess.mjs'
+import { BrowserRunFetchProvider, SELECTION } from '../../../packages/cf-web-browser-run/src/index.mjs'
 import { CfCredentialsDo } from '../../../packages/cf-credentials-do/src/index.mjs'
 import { CfSessionQueryDo } from '../../../packages/cf-session-query-do/src/index.mjs'
 import { CfWorkspacePicker } from '../../../packages/cf-workspace-picker/src/index.mjs'
@@ -335,6 +336,10 @@ export class SessionAgentDO extends DurableObject {
   async ensureTree() {
     if (this.tree) return this.tree
     const t0 = Date.now()
+    // Logged because a slow tree build presents as a WebSocket that never
+    // opens, and `wrangler tail` reports that as `canceled` with no exception
+    // and no clue about which await was the slow one.
+    const mark = (label) => console.log(`[tree] ${label} at ${Date.now() - t0}ms`)
     // Before anything that can fail. It used to be initialised after assemble,
     // which meant the one failure that runs DURING assemble -- reading the
     // deployment plugin store -- pushed into `undefined` through a `?.` and
@@ -356,17 +361,26 @@ export class SessionAgentDO extends DurableObject {
             this.storeStatus = { name, self: true, rows: 0 }
             return []
           }
+          // Bounded, because this is one shared object on the boot path of
+          // every session in the deployment. Without a deadline, anything that
+          // makes that object slow makes every session in the tenant slow, and
+          // the symptom is a WebSocket that never opens -- which reads as "the
+          // agent is down", not "one plugin store is busy".
+          const t0 = Date.now()
           const response = await this.env.SESSION.get(id).fetch('http://session/plugin-store', {
             headers: { 'x-dsh-tenant': this.tenant },
+            signal: AbortSignal.timeout(2000),
           })
           const body = await response.json()
           const rows = body?.rows ?? []
+          console.log(`[plugin-store] ${name} -> ${response.status} ${rows.length} rows in ${Date.now() - t0}ms`)
           // Reported rather than inferred. "No deployment plugins" and "the
           // shared object was never asked" produce the same empty list, and
           // telling them apart from the outside is otherwise impossible.
           this.storeStatus = { name, status: response.status, rows: rows.length }
           return rows
         } catch (error) {
+          console.log(`[plugin-store] ${name} failed: ${String(error?.message ?? error)}`)
           this.storeStatus = { name, error: String(error?.message ?? error) }
           // A store that cannot be read must not stop a session from booting:
           // the user's own plugins, and the harness itself, do not depend on it.
@@ -385,6 +399,7 @@ export class SessionAgentDO extends DurableObject {
       }),
     })
 
+    mark('registry constructed')
     const { ctx, report } = await assemble(Context, modules, {
       skip: SKIP,
       config: CONFIG,
@@ -492,12 +507,14 @@ export class SessionAgentDO extends DurableObject {
     // dsh-workspace publishes `workspaceRegistry`, which dsh-host-apiproxy --
     // the whole client protocol -- injects. Awaited here so a failure is an
     // error with a message rather than a service that silently never appears.
+    mark('assembled')
     const workspace = modules['@deepseek-ai/dsh-workspace']
     try {
       await ctx.plugin(workspace.default ?? workspace)
     } catch (error) {
       this.lateErrors.push({ specifier: 'dsh-workspace', error: String(error?.message ?? error) })
     }
+    mark('workspace mounted')
 
     // Both routes are always registered; which one an agent uses is its
     // `agentOptions.provider`, decided per request rather than at build time.
@@ -512,12 +529,31 @@ export class SessionAgentDO extends DurableObject {
     }
     this.adapter = this.workersAi ?? this.stub
 
+    // The twelfth seam. `dsh-web` is abstract -- it publishes `ctx.web` and a
+    // registry -- and `dsh-tool-web` advertises `web_fetch` to the model over
+    // it. With no fetch provider registered, that tool was in every model's
+    // tool list and every call ended in WEB_PROVIDER_UNAVAILABLE: the one seam
+    // here that was empty without saying so.
+    //
+    // The binding's presence is the switch, as with EXEC (ADR-06). No binding,
+    // no provider, and `web_fetch` fails the way it already did.
+    if (this.env?.BROWSER) {
+      try {
+        this.webFetch = new BrowserRunFetchProvider({ browser: this.env.BROWSER })
+        ctx.web.registerFetchProvider(this.webFetch)
+      } catch (error) {
+        this.lateErrors.push({ specifier: 'cf-web-browser-run', error: String(error?.message ?? error) })
+      }
+    }
+
     // Third-party plugins, installed at runtime and running in their own
     // isolates. Attached AFTER the tree, because their tools register into a
     // context that has to exist first, and because a plugin failing must not
     // stop the harness from booting -- an installed plugin is not a dependency.
     if (this.plugins.available) {
+      mark('attaching plugins')
       this.pluginReport = await this.plugins.attachTools(ctx)
+      mark('plugins attached')
     }
 
     // Live push. `session/event` is a real Cordis event carrying (session,
@@ -547,6 +583,7 @@ export class SessionAgentDO extends DurableObject {
     // releases dsh-host-apiproxy. Snapshotting the service list immediately
     // reported `workspaceRegistry` as unmet and left ctx.apiProxy undefined --
     // a tree that was fine and had simply not finished.
+    mark('settling for workspaceRegistry')
     await settleFor(ctx, ['workspaceRegistry'], 3000)
 
     // Align the tree-level default model with the binding that actually exists.
@@ -578,6 +615,7 @@ export class SessionAgentDO extends DurableObject {
       this.lateErrors.push({ specifier: 'api-proxy', error: String(error?.message ?? error) })
     }
 
+    mark('tree ready')
     this.tree = { ctx, report, services: servicesOn(ctx), assembleMs: Date.now() - t0 }
     return this.tree
   }
@@ -722,6 +760,72 @@ export class SessionAgentDO extends DurableObject {
         return Response.json({ removed: id })
       }
       return Response.json({ error: 'use GET, POST or DELETE' }, { status: 405 })
+    }
+
+    // What the documentation does not say, and what it cost to find out.
+    //
+    // Browser Run documents `?browser=kitesurf` for its REST endpoints and
+    // shows no binding equivalent. This swept every placement the binding has:
+    // two were refused outright, and the third was accepted and ignored --
+    // billing MORE browser time than the controls, not the documented 3-7x
+    // less. The package is named cf-web-browser-run because of this probe.
+    //
+    // It stays deployed rather than being deleted with its finding: a
+    // capability billed by the millisecond should be re-measurable when the
+    // platform changes, instead of re-derived from documentation.
+    if (url.pathname === '/web-probe') {
+      const target = url.searchParams.get('url') ?? 'https://example.com'
+      if (!this.env?.BROWSER) {
+        return Response.json({
+          error: 'no-browser-binding',
+          hint: 'add "browser": { "binding": "BROWSER" } to units/session-do/wrangler.jsonc',
+        }, { status: 503 })
+      }
+      // A distinct URL per attempt. The first sweep compared 954ms against
+      // 6ms with `browserMs` identical to eleven decimal places -- Quick
+      // Actions had cached by URL and the control row was a replay of the
+      // first. Two engines do not agree to the picosecond; a cache does.
+      const attempt = async (selection, tag) => {
+        const provider = new BrowserRunFetchProvider({ browser: this.env.BROWSER, selection })
+        const bust = new URL(target)
+        bust.searchParams.set('__dsh_probe', tag)
+        const t0 = Date.now()
+        try {
+          const result = await provider.fetch({ url: bust.toString() })
+          return {
+            asked: selection ?? 'default',
+            ok: true,
+            wallMs: Date.now() - t0,
+            browserMs: provider.browserMs,
+            statusCode: result.statusCode,
+            bytes: result.body.content.length,
+            headers: provider.lastHeaders,
+            head: result.body.content.slice(0, 160),
+          }
+        } catch (error) {
+          return { asked: selection ?? 'default', ok: false, wallMs: Date.now() - t0, code: error?.code, error: String(error?.message ?? error).slice(0, 400) }
+        }
+      }
+      // Every candidate placement, plus the default as the control row. The
+      // comparison is the evidence: `browserMs` is what the platform bills, so
+      // a placement that Kitesurf actually honours should show it, and one that
+      // is silently ignored will be indistinguishable from the control.
+      return Response.json({
+        target,
+        attempts: {
+          options: await attempt(SELECTION.options, 'options'),
+          body: await attempt(SELECTION.body, 'body'),
+          action: await attempt(SELECTION.action, 'action'),
+          default: await attempt(null, 'default'),
+          // A second control on its own URL. Two default rows that disagree
+          // with each other set the noise floor, without which "options is
+          // 30% cheaper" means nothing.
+          defaultAgain: await attempt(null, 'default2'),
+        },
+        note: 'Each row fetches its own URL: Quick Actions caches by URL, and the first sweep '
+          + 'compared a live call against a replay of itself. Read `options` against BOTH default '
+          + 'rows -- the gap between the two controls is the noise floor.',
+      })
     }
 
     // Installing, listing and removing third-party plugins.
@@ -1259,11 +1363,38 @@ export class SessionAgentDO extends DurableObject {
    */
   workspaceFsBridge() {
     const call = async (payload) => {
-      const response = await this.env.EXEC.fetch('http://exec/fs', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ sandboxId: this.sandboxId, cwd: WORKSPACE_ROOT, payload }),
-      })
+      // Bounded, and this is the deadline that matters most in the whole file.
+      //
+      // dsh-workspace mounts during the tree build and touches the container
+      // while it does. With `max_instances` reached, the container platform
+      // does not refuse a new sandbox -- it QUEUES it -- so this fetch simply
+      // never returned. The tree never finished, `/events.host` and
+      // `/events.mux` never upgraded, and the browser retried forever against
+      // a deployment whose every other part was healthy. Wall time 37s, CPU
+      // time 79ms, no exception: a saturated pool of three containers was
+      // indistinguishable from a dead agent.
+      //
+      // 15s is above a genuine cold start and below the client's own patience,
+      // so a busy execution world now surfaces as an error with a cause instead
+      // of a UI that never loads.
+      let response
+      try {
+        response = await this.env.EXEC.fetch('http://exec/fs', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ sandboxId: this.sandboxId, cwd: WORKSPACE_ROOT, payload }),
+          signal: AbortSignal.timeout(15_000),
+        })
+      } catch (error) {
+        if (error?.name === 'TimeoutError' || /aborted|timed? ?out/i.test(String(error?.message))) {
+          throw new Error(
+            `the execution world did not answer within 15s (op: ${payload?.op}). `
+            + 'This is what a container pool at max_instances looks like from here: '
+            + 'requests queue rather than fail. Check `wrangler containers list`.',
+          )
+        }
+        throw error
+      }
       const body = await response.json()
       if (!body?.ok) throw new Error(String(body?.error ?? 'the execution world did not answer'))
       return body.result
@@ -1846,6 +1977,12 @@ export class SessionAgentDO extends DurableObject {
   }
 
   async snapshot() {
+    // Resolved before the literal below, which is not an async context.
+    const pluginRows = this.plugins?.available
+      ? (await this.plugins.resolveRows()).map(({ source, ...row }) => ({
+          ...row, enabled: Boolean(row.enabled), bytes: source?.length,
+        }))
+      : []
     const byType = (() => {
       try {
         return this.sql
@@ -1911,8 +2048,12 @@ export class SessionAgentDO extends DurableObject {
                 return [{ error: String(error?.message ?? error) }]
               }
             })(),
+            // Both scopes, same as /plugins. Listing only this object's rows
+            // reported a deployment with no third-party plugins while the
+            // `tools` list below carried their tools -- two halves of one
+            // report disagreeing about the same fact.
             plugins: this.plugins?.available
-              ? { installed: this.plugins.list(), ...(this.pluginReport ?? {}) }
+              ? { installed: pluginRows, store: this.storeStatus, ...(this.pluginReport ?? {}) }
               : { installed: [], note: 'no LOADER binding: third-party plugins are unavailable' },
             // The end of the chain, and the only thing the model can actually
             // see. Everything above is plumbing; this is the outcome.

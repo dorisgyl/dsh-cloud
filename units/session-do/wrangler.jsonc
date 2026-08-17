@@ -24,6 +24,12 @@
   // is "any signed-in user may install code for every other user", which is not
   // something a deployment should get by omission.
 
+  // The `ctx.web` fetch seam (cf-web-browser-run). A binding, not an API token --
+  // the same zero-configuration default as the AI binding above (ADR-12).
+  // Needs compatibility_date >= 2026-03-24 for quickAction(); this unit is on
+  // 2026-08-01.
+  "browser": { "binding": "BROWSER" },
+
   "worker_loaders": [{ "binding": "LOADER" }],
 
   "durable_objects": {

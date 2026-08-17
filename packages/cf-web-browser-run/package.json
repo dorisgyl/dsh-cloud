@@ -1,0 +1,13 @@
+{
+  "name": "cf-web-browser-run",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "The upstream ctx.web fetch seam, over Cloudflare Browser Run.",
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-web": "0.1.0-rc.6"
+  }
+}

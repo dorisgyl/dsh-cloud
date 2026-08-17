@@ -79,8 +79,26 @@ update_goal        web_fetch  web_search   write
 | `dsh-tool-cordis`, `dsh-tool-ralph`, `dsh-tool-workflow` | need a plugin host or an OS shell we do not provide |
 | `dsh-tool-fs-search`, `dsh-tool-str-replace-editor` | not published at this upstream version |
 
-`web_search` and `web_fetch` are registered but **untested**; they likely need a
-credential this deployment has not been given.
+`web_fetch` **works**, over `cf-web-browser-run`. `web_search` does not, and the
+two failed for different reasons — which the earlier version of this line got
+wrong by giving them one:
+
+`dsh-web` is an abstract seam, like `dsh-shell` and `dsh-fs`: it publishes
+`ctx.web` and a provider registry, and `dsh-tool-web` advertises both tools over
+it. Search had a provider needing a credential. **Fetch had no provider at
+all** — so `web_fetch` sat in every model's tool list with every call ending in
+`WEB_PROVIDER_UNAVAILABLE`. Of the twelve abstract seams this is the only one
+that was empty *without saying so*: the other eleven are filled or in `SKIP`
+with a recorded reason.
+
+Filling it needed no credential. `env.BROWSER.quickAction()` is a **binding**,
+so this is ADR-12's zero-configuration default applied a second time: like
+Workers AI, it works on `wrangler deploy` with nothing pasted anywhere, while
+every provider upstream ships (Exa, Perplexity, DeepSeek search) needs a key the
+self-deployer has to go get.
+
+**`web_search` stays unfilled.** Quick Actions has no search endpoint, and a
+browser is not a search engine.
 
 ## Model providers
 
