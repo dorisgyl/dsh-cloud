@@ -139,12 +139,11 @@ search. A browser is not a search engine, and no amount of it becomes one.
 already in the bundle and wants a key.
 
 ## Not done
-- **Third-party plugins cannot reach the web.** A plugin granted `shell` can
-  probably already reach it through the container, which would mean "plugins
-  have no network" is conditional rather than true — unmeasured, and named in
-  `M4-plugins.md` as such. If it holds, a `web:fetch` capability would *narrow*
-  the permission model rather than widen it: today the only way to let a plugin
-  read a page is to hand it the whole container.
+- **No `web:fetch` capability for third-party plugins.** Measured since:
+  `shell` already grants the internet, because the container's egress answers
+  200 while the isolate's is null. So this is not a missing fence but a missing
+  *narrow* one — today the only way to let a plugin read one page is to hand it
+  the whole container. `M4-plugins.md` carries the correction.
 - **One page, one origin.** Every number here is `example.com`, which is
   trivial to render. The engines' difference should be larger on a page that
   actually needs a browser, and nothing here measures that.

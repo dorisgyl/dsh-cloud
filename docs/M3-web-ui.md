@@ -187,8 +187,9 @@ rejected, so nothing was traded away to make the first line work.
 
 ## Not done
 
-- **Not opened in a browser.** Every call above was made with a service token
-  over curl; the SPA's own behaviour against this protocol is unverified.
+- ~~**Not opened in a browser.**~~ Done. The SPA was driven through this
+  protocol end to end: sessions, workspaces, the composer, the terminal, tool
+  calls, and both WebSocket downlinks.
 - **`agentPresets`** is absent, so `session.create` refuses a preset rather than
   quietly ignoring it, and `agentPreset.*` methods are unserved.
 - **Attachments are rows, not R2.** Design 6.4 wants presigned direct upload;

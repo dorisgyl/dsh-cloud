@@ -428,6 +428,16 @@ export class SessionAgentDO extends DurableObject {
       // resolve the ambiguity at all until this passed the id explicitly.
       config: {
         ...CONFIG,
+        // The key's designed home is the credentials service (the web UI's
+        // Models page writes it), and that works. This is the second road:
+        // upstream also falls back to the launch environment, which on workerd
+        // does not exist -- `process.env` is not a thing here -- so a
+        // deployment that would rather use a secret than a UI form had no way
+        // in at all.
+        '@deepseek-ai/dsh-web-search-deepseek': {
+          ...(this.env?.DEEPSEEK_API_KEY ? { apiKey: this.env.DEEPSEEK_API_KEY } : {}),
+          ...(this.env?.DEEPSEEK_SEARCH_BASE_URL ? { baseURL: this.env.DEEPSEEK_SEARCH_BASE_URL } : {}),
+        },
         '@deepseek-ai/dsh-web': {
           ...(this.env?.DSH_WEB_SEARCH_PROVIDER ? { searchProvider: this.env.DSH_WEB_SEARCH_PROVIDER } : {}),
           ...(this.env?.DSH_WEB_FETCH_PROVIDER ? { fetchProvider: this.env.DSH_WEB_FETCH_PROVIDER } : {}),
