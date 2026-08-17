@@ -99,6 +99,35 @@ Two more fences:
 where a permission model attaches when there is a second extension point to
 permit.
 
+### `shell` is a network grant, and this page used to say otherwise
+
+The isolate has no network — measured above. This page then concluded that "the
+only real fence is that it has no network", and that sentence was **false for
+any plugin granted `shell`**.
+
+`shell` runs commands in the container, and the container's egress is not the
+isolate's. Measured through `/api/ddg-probe`:
+
+```
+container: curl -o /dev/null -w "%{http_code}" https://example.com/   ->  200
+```
+
+A plugin holding `shell` has always been able to reach the whole internet with
+one `curl`. Nothing changed to make that true — it was true the day the
+permission was introduced. The isolate measurement was real, and it was cited
+as covering a case it never touched: `globalOutbound: null` says what the
+ISOLATE can do, and it was read as what a PLUGIN can do. Two different subjects,
+one sentence.
+
+The permission text now says so: *"run commands in the execution world, which
+can reach the internet"*. A consent string that omits the network is asking for
+consent to something else.
+
+The consequence for the permission model is the opposite of how it looks. A
+`web:fetch` capability would **narrow** the grants on offer, not widen them:
+today the only way to let a plugin read one web page is to hand it the whole
+container.
+
 ## What a plugin can register, and what it can ask for
 
 Two different faces, in opposite directions, and conflating them is the most
@@ -235,7 +264,6 @@ user of this deployment". That is not something anyone should get by omission.
 
 ## Not done
 - **No signing, no provenance, no versioning beyond a content hash.** Installing
-  a plugin means trusting whoever wrote it, and today the only real fence is
-  that it has no network.
+  a plugin means trusting whoever wrote it.
 - **The isolate is per (id, rev)** and the loader's cache is opaque; there is no
   measurement of cold-start cost for a plugin call.

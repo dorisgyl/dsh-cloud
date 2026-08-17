@@ -24,6 +24,8 @@ import { CfShellExecutor } from '../../../packages/cf-exec-provider/src/shell.mj
 import { CfFileSystem } from '../../../packages/cf-exec-provider/src/fs.mjs'
 import { CfSubprocessService } from '../../../packages/cf-exec-provider/src/subprocess.mjs'
 import { BrowserRunFetchProvider, SELECTION } from '../../../packages/cf-web-browser-run/src/index.mjs'
+import { TavilySearchProvider } from '../../../packages/cf-web-search-tavily/src/index.mjs'
+import { DuckDuckGoSearchProvider } from '../../../packages/cf-web-search-duckduckgo/src/index.mjs'
 import { CfCredentialsDo } from '../../../packages/cf-credentials-do/src/index.mjs'
 import { CfSessionQueryDo } from '../../../packages/cf-session-query-do/src/index.mjs'
 import { CfWorkspacePicker } from '../../../packages/cf-workspace-picker/src/index.mjs'
@@ -420,7 +422,17 @@ export class SessionAgentDO extends DurableObject {
     mark('registry constructed')
     const { ctx, report } = await assemble(Context, modules, {
       skip: SKIP,
-      config: CONFIG,
+      // Per deployment, merged over the static table. The web seam reads its
+      // provider choice from `process.env.DSH_WEB_SEARCH_PROVIDER`, which does
+      // not exist on workerd -- so a deployment with two search keys could not
+      // resolve the ambiguity at all until this passed the id explicitly.
+      config: {
+        ...CONFIG,
+        '@deepseek-ai/dsh-web': {
+          ...(this.env?.DSH_WEB_SEARCH_PROVIDER ? { searchProvider: this.env.DSH_WEB_SEARCH_PROVIDER } : {}),
+          ...(this.env?.DSH_WEB_FETCH_PROVIDER ? { fetchProvider: this.env.DSH_WEB_FETCH_PROVIDER } : {}),
+        },
+      },
       settleMs: 1500,
       // Every upstream plugin becomes a loader entry, so the deployment is
       // inspectable as a plugin tree rather than as an opaque set of fibers.
@@ -569,6 +581,41 @@ export class SessionAgentDO extends DurableObject {
         ctx.web.registerFetchProvider(this.webFetch)
       } catch (error) {
         this.lateErrors.push({ specifier: 'cf-web-browser-run', error: String(error?.message ?? error) })
+      }
+    }
+
+    // A SECOND search provider, alongside upstream's own -- the seam is a
+    // registry, and upstream ships three of these itself.
+    //
+    // Selection is deliberately not a priority chain: an explicit id, or
+    // exactly one usable provider, and two usable ones are
+    // WEB_PROVIDER_AMBIGUOUS. `available()` is a credential check, so with one
+    // key between them the seam auto-selects and nothing needs configuring.
+    // With both keys, DSH_WEB_SEARCH_PROVIDER has to name one -- which is why
+    // the config below passes `searchProvider` through rather than leaving a
+    // deployment to discover the ambiguity from a failed turn.
+    if (this.env?.TAVILY_API_KEY) {
+      try {
+        this.webSearch = new TavilySearchProvider({ apiKey: this.env.TAVILY_API_KEY })
+        ctx.web.registerSearchProvider(this.webSearch)
+      } catch (error) {
+        this.lateErrors.push({ specifier: 'cf-web-search-tavily', error: String(error?.message ?? error) })
+      }
+    }
+
+    // The keyless one, off unless switched on.
+    //
+    // It has no credential to check, so `available()` cannot answer "am I
+    // configured" the way every other provider's does. Left always-available it
+    // would sit next to any keyed provider as a second usable one, and two
+    // usable providers is WEB_PROVIDER_AMBIGUOUS -- a free provider nobody
+    // asked for would break a paid one that worked.
+    if (this.env?.WEB_SEARCH_DUCKDUCKGO === '1') {
+      try {
+        this.webSearchDdg = new DuckDuckGoSearchProvider()
+        ctx.web.registerSearchProvider(this.webSearchDdg)
+      } catch (error) {
+        this.lateErrors.push({ specifier: 'cf-web-search-duckduckgo', error: String(error?.message ?? error) })
       }
     }
 
@@ -788,6 +835,120 @@ export class SessionAgentDO extends DurableObject {
       return Response.json({ error: 'use GET, POST or DELETE' }, { status: 405 })
     }
 
+    // Does DuckDuckGo serve a Worker's egress IP?
+    //
+    // Measured from a developer machine it did not: HTTP 202 carrying
+    // "bots use DuckDuckGo too" and a duck-selection challenge. A Worker calls
+    // from Cloudflare's ranges, which is a different address and the only one
+    // that matters for this deployment -- and the answer cannot be inferred
+    // from the other measurement, only taken.
+    if (url.pathname === '/ddg-probe') {
+      const query = url.searchParams.get('q') ?? 'cloudflare durable objects sqlite'
+      const provider = new DuckDuckGoSearchProvider()
+      const t0 = Date.now()
+
+      // The container's egress, which is not the Worker's.
+      //
+      // Three open questions, one measurement: does the container reach the
+      // internet at all (M2 never measured it), does DuckDuckGo answer from
+      // there, and is "a plugin has no network" true or merely conditional --
+      // because a plugin granted `shell` runs commands HERE, and if this
+      // reaches the internet then that grant has always been a network grant.
+      let container
+      if (this.env?.EXEC) {
+        const run = async (label, command) => {
+          const t = Date.now()
+          try {
+            const response = await this.env.EXEC.fetch('http://exec/exec', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ sandboxId: this.sandboxId, command, cwd: '/workspace' }),
+            })
+            const body = await response.json()
+            return { label, ms: Date.now() - t, exitCode: body?.result?.exitCode ?? body?.exitCode, out: String(body?.result?.stdout ?? body?.stdout ?? '').slice(0, 200).trim(), err: String(body?.result?.stderr ?? body?.stderr ?? '').slice(0, 120).trim() }
+          } catch (error) {
+            return { label, ms: Date.now() - t, error: String(error?.message ?? error).slice(0, 120) }
+          }
+        }
+        container = {
+          // Control first: does anything at all get out of the container.
+          control: await run('control', 'curl -s -o /dev/null -w "%{http_code}" --max-time 15 https://example.com/'),
+          // Then the question that started this.
+          // Counts, not the page: what matters is which of the three shapes
+          // came back, and a whole results page would swamp the response.
+          ddg: await run('ddg', 'curl -s --max-time 20 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "https://html.duckduckgo.com/html/?q=cloudflare+workers" > /tmp/ddg.html; echo "bytes=$(wc -c < /tmp/ddg.html) results=$(grep -c result__a /tmp/ddg.html || true) challenge=$(grep -c anomaly /tmp/ddg.html || true)"'),
+          ddgHead: await run('ddgHead', 'curl -s -o /dev/null -w "%{http_code} %{time_total}s" --max-time 20 "https://html.duckduckgo.com/html/?q=test"'),
+        }
+      }
+      // The raw call as well as the provider's verdict. A 522 with a 16-byte
+      // body says something the provider's classification cannot: whether
+      // anything answered at all. Guessing what those 16 bytes were, instead
+      // of printing them, is how the last wrong explanation got written.
+      // Every endpoint DuckDuckGo serves this from, plus one control.
+      //
+      // `html.duckduckgo.com` answered 522 twice -- Cloudflare's edge reaching
+      // Cloudflare's edge and timing out, with a cf-ray to prove the request
+      // got that far. From a developer machine the same URL returns a captcha
+      // page in under a second, so the origin is alive and this path is not.
+      // Whether that is one hostname or all of them is a different question,
+      // and it is cheaper to ask it than to assume either answer.
+      const q = encodeURIComponent(query)
+      const targets = [
+        ['html', `https://html.duckduckgo.com/html/?q=${q}`],
+        ['lite', `https://lite.duckduckgo.com/lite/?q=${q}`],
+        ['apex', `https://duckduckgo.com/html/?q=${q}`],
+        // Control: a plain origin not behind Cloudflare, to separate "this
+        // host refuses Workers" from "this Worker cannot reach the internet".
+        ['control', 'https://example.com/'],
+      ]
+      const raw = {}
+      for (const [label, target] of targets) {
+        const t = Date.now()
+        try {
+          const direct = await fetch(target, {
+            headers: {
+              'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              accept: 'text/html,application/xhtml+xml',
+            },
+            signal: AbortSignal.timeout(20_000),
+          })
+          const body = await direct.text()
+          raw[label] = {
+            status: direct.status,
+            ms: Date.now() - t,
+            bytes: body.length,
+            server: direct.headers.get('server'),
+            results: (body.match(/result__a/g) ?? []).length,
+            challenge: /anomaly\.js|bots use DuckDuckGo/.test(body),
+            preview: body.slice(0, 120).replace(/\s+/g, ' '),
+          }
+        } catch (error) {
+          raw[label] = { ms: Date.now() - t, error: String(error?.message ?? error).slice(0, 120) }
+        }
+      }
+      try {
+        const result = await provider.search({ query, maxResults: 5 })
+        return Response.json({
+          verdict: 'SERVED',
+          raw,
+          container,
+          ms: Date.now() - t0,
+          count: result.sources.length,
+          sources: result.sources,
+        })
+      } catch (error) {
+        return Response.json({
+          verdict: error?.code === 'WEB_PROVIDER_BLOCKED' ? 'REFUSED' : 'FAILED',
+          raw,
+          container,
+          ms: Date.now() - t0,
+          code: error?.code,
+          error: String(error?.message ?? error),
+          note: 'REFUSED means the endpoint answered and declined to search, which is not zero results.',
+        })
+      }
+    }
+
     // Attribute the fs seam's cost. dsh-exec is workers_dev:false and
     // reachable only through this binding, so the probe needs a door here.
     if (url.pathname === '/fs-timing') {
@@ -866,6 +1027,14 @@ export class SessionAgentDO extends DurableObject {
         // Asked of the provider, not recomputed from env. Recomputing is how
         // this line came to report 'binding (default)' for a provider that was
         // configured for REST.
+        search: {
+          tavily: this.webSearch ? { registered: true, available: this.webSearch.available(), calls: this.webSearch.calls } : 'no TAVILY_API_KEY',
+          duckduckgo: this.webSearchDdg
+            ? { registered: true, calls: this.webSearchDdg.calls, blocked: this.webSearchDdg.blocked, lastOutcome: this.webSearchDdg.lastOutcome }
+            : 'off (set WEB_SEARCH_DUCKDUCKGO=1)',
+          // Named because two usable providers is an error, not a preference.
+          selected: this.env?.DSH_WEB_SEARCH_PROVIDER ?? '(auto: whichever single provider is usable)',
+        },
         live: this.webFetch
           ? {
               willUse: this.webFetch.plannedTransport,

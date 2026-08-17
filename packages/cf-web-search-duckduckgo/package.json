@@ -1,0 +1,9 @@
+{
+  "name": "cf-web-search-duckduckgo",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "A keyless ctx.web search provider over DuckDuckGo's HTML endpoint.",
+  "exports": { ".": "./src/index.mjs" },
+  "dependencies": { "@deepseek-ai/dsh-web": "0.1.0-rc.6" }
+}

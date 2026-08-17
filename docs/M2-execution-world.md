@@ -12,6 +12,23 @@ FINAL REPLY  "The command ran successfully ... confirming the container is runni
 The path is Access → edge → session object → alarm → tool call → U5 → container,
 and back.
 
+## The container reaches the internet
+
+```
+curl -o /dev/null -w "%{http_code}" https://example.com/    ->  200   (3.3s cold)
+```
+
+Never measured until now, and two documents depended on the answer.
+`M4-plugins.md` said a third-party plugin's fence was having no network — true
+of the isolate, false of any plugin granted `shell`, which runs here.
+
+It also settles what the Worker cannot do. From a Worker, all three DuckDuckGo
+endpoints answer HTTP 522 in ~19.5s with a 16-byte body, while `example.com`
+answers 200 in 11ms — so the Worker's egress is healthy and there is simply no
+route to that host. From the container the same URL returns HTTP 202 in 1.4s
+carrying a bot challenge. Different egress, different answer, and neither is a
+usable search backend.
+
 ## What one fs call costs, measured
 
 `/api/fs-timing`, warm, each row one `sandbox.exec` so each includes one SDK

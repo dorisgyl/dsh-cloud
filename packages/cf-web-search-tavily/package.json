@@ -1,0 +1,9 @@
+{
+  "name": "cf-web-search-tavily",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "A ctx.web search provider over Tavily, alongside upstream's own.",
+  "exports": { ".": "./src/index.mjs" },
+  "dependencies": { "@deepseek-ai/dsh-web": "0.1.0-rc.6" }
+}

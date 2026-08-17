@@ -36,7 +36,14 @@ const SCHEMA = `CREATE TABLE IF NOT EXISTS plugin (
 export const PERMISSIONS = {
   'fs:read': 'read files and list directories in the workspace',
   'fs:write': 'create and overwrite files in the workspace',
-  'shell': 'run commands in the execution world',
+  // Says "and reach the network" because it does, and a consent string that
+  // omits it is asking for consent to something else. The isolate has no
+  // network (`globalOutbound: null`, measured), but this permission does not
+  // run in the isolate -- it runs commands in the container, whose egress was
+  // measured at HTTP 200 to a public host. `docs/M4-plugins.md` claimed for
+  // several releases that a plugin's fence was having no network; that was a
+  // statement about the isolate being read as a statement about the plugin.
+  'shell': 'run commands in the execution world, which can reach the internet',
 }
 
 /** A namespaced command name inside upstream's alphabet. */
