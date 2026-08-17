@@ -98,3 +98,50 @@ export function withCoalescing(adapter, options = {}) {
     },
   })
 }
+
+/**
+ * The same Proxy trick, for counting model turns.
+ *
+ * Placed on the adapter rather than at a call site, and that is the whole
+ * point. A budget check written into `runTurn` covered the queue path and
+ * missed the web UI entirely, because the UI drives the agent loop through
+ * dsh-host-apiproxy and never calls `runTurn`. Two doors, one guard, and the
+ * unguarded one was the one people actually use.
+ *
+ * There is exactly one door a model call cannot avoid: this.
+ *
+ * `check` runs before the stream opens and may refuse. Refusing here surfaces
+ * as a failed turn with a message, which is the honest shape -- the alternative
+ * is a UI that accepts a prompt and silently does nothing.
+ */
+export function withMetering(adapter, { check, record } = {}) {
+  return new Proxy(adapter, {
+    get(target, property, receiver) {
+      if (property !== 'stream') return Reflect.get(target, property, receiver)
+      return async function* stream(callOptions) {
+        const verdict = await check?.()
+        if (verdict && verdict.ok === false) {
+          throw new Error(`${verdict.message}. Resets at ${verdict.resetsAt}.`)
+        }
+        let inputTokens = 0
+        let outputTokens = 0
+        try {
+          for await (const chunk of target.stream(callOptions)) {
+            // The adapter reports usage in its own `usage` chunk; reading it
+            // here rather than estimating keeps one source of truth.
+            if (chunk?.type === 'usage') {
+              inputTokens = chunk.usage?.inputTokens ?? 0
+              outputTokens = chunk.usage?.outputTokens ?? 0
+            }
+            yield chunk
+          }
+        } finally {
+          // In `finally`, because a turn abandoned halfway was still charged
+          // for by the provider. Counting only completed turns would meter the
+          // cheapest possible reading of an expensive event.
+          record?.({ turns: 1, inputTokens, outputTokens })
+        }
+      }
+    },
+  })
+}

@@ -1,0 +1,8 @@
+{
+  "name": "cf-admission",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Who may use this deployment: a GitHub login that has starred the repo.",
+  "exports": { ".": "./src/index.mjs" }
+}

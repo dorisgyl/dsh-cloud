@@ -1,0 +1,8 @@
+{
+  "name": "cf-budget",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Per-user rate limits and spend caps over Durable Object SQLite.",
+  "exports": { ".": "./src/index.mjs" }
+}

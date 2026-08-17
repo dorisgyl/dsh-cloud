@@ -16,7 +16,7 @@ import { modules } from '../build/plugins.generated.js'
 import { assemble, servicesOn, unmetInjects } from '../../../packages/cf-boot/src/plugin-tree.mjs'
 import { StubLlmAdapter } from '../../../packages/cf-testing/src/stub-llm-adapter.mjs'
 import { WorkersAiAdapter, resolveModelId } from '../../../packages/cf-llm-transport/src/workers-ai.mjs'
-import { withCoalescing } from '../../../packages/cf-llm-transport/src/coalesce.mjs'
+import { withCoalescing, withMetering } from '../../../packages/cf-llm-transport/src/coalesce.mjs'
 import cfStorageDo from '../../../packages/cf-storage-do/src/index.mjs'
 import { CfSessionPersistenceDo } from '../../../packages/cf-session-persistence-do/src/index.mjs'
 import { CfSettingsDo } from '../../../packages/cf-settings-do/src/index.mjs'
@@ -25,6 +25,8 @@ import { CfFileSystem } from '../../../packages/cf-exec-provider/src/fs.mjs'
 import { CfSubprocessService } from '../../../packages/cf-exec-provider/src/subprocess.mjs'
 import { BrowserRunFetchProvider, SELECTION } from '../../../packages/cf-web-browser-run/src/index.mjs'
 import { TavilySearchProvider } from '../../../packages/cf-web-search-tavily/src/index.mjs'
+import { Budget, LIMITS } from '../../../packages/cf-budget/src/index.mjs'
+import { Admission } from '../../../packages/cf-admission/src/index.mjs'
 import { DuckDuckGoSearchProvider } from '../../../packages/cf-web-search-duckduckgo/src/index.mjs'
 import { CfCredentialsDo } from '../../../packages/cf-credentials-do/src/index.mjs'
 import { CfSessionQueryDo } from '../../../packages/cf-session-query-do/src/index.mjs'
@@ -170,6 +172,20 @@ const ACTIVE_FIBER = 2
  * and this name comes from none. Only a session object reaches it, server-side.
  */
 const deploymentStoreName = (tenant) => `tenant/${tenant}/plugins`
+
+/**
+ * The one object that holds a user's meters, whichever session they are in.
+ *
+ * Matches `userObjectName` in cf-identity, and the level matters: the session
+ * id comes from `?session=` and the caller chooses it, so every session object
+ * is a fresh sandbox and a fresh set of counters. A ledger attached there is
+ * reset by incrementing a query parameter. The user segment is the deepest one
+ * a caller cannot vary while remaining themselves.
+ */
+const budgetObjectName = (tenant, user) => `tenant/${tenant}/user/${user}`
+
+/** One object per tenant holds the stargazer list the whole deployment gates on. */
+const admissionObjectName = (tenant) => `tenant/${tenant}/admission`
 
 // Config for plugins whose schema has required fields. cf-settings-do will
 // supply these from TenantDO once it exists.
@@ -504,7 +520,7 @@ export class SessionAgentDO extends DurableObject {
     // detect the tier or hide anything.
     if (this.env?.EXEC) {
       await ctx.plugin(CfShellExecutor, {
-        exec: this.env.EXEC,
+        exec: this.meteredExec(),
         // One sandbox per session for now. A workspace outliving its session
         // (design 6.3) is the next step, and changes only this id.
         sandboxId: this.sandboxId,
@@ -513,13 +529,13 @@ export class SessionAgentDO extends DurableObject {
       // execution world, or a file written by bash would be invisible to the
       // read tool.
       await ctx.plugin(CfFileSystem, {
-        exec: this.env.EXEC,
+        exec: this.meteredExec(),
         sandboxId: this.sandboxId,
       })
       // The PTY seam. dsh-terminal-bash waits on `subprocess`, so registering
       // this is what makes the whole terminal stack come alive.
       await ctx.plugin(CfSubprocessService, {
-        exec: this.env.EXEC,
+        exec: this.meteredExec(),
         sandboxId: this.sandboxId,
       })
       // A directory picker onto the execution world. Without an EXEC binding
@@ -527,7 +543,7 @@ export class SessionAgentDO extends DurableObject {
       // the client protocol will report the picker as unavailable rather than
       // offer one that answers nothing.
       await ctx.plugin(CfWorkspacePicker, {
-        exec: this.env.EXEC,
+        exec: this.meteredExec(),
         sandboxId: this.sandboxId,
       })
     }
@@ -561,11 +577,24 @@ export class SessionAgentDO extends DurableObject {
     // Both adapters stream through the same coalescer (ADR-10). The agent loop
     // writes one log entry per chunk an adapter yields, so this is the only
     // place the log's granularity can be set.
+    // Metering wraps coalescing, so every adapter this deployment offers is
+    // counted the same way whichever path reaches it -- the queue, the web UI,
+    // or a subagent.
+    const metered = (adapter) => withMetering(withCoalescing(adapter, this.coalescing), {
+      check: () => this.ledger('/check', { meter: 'modelTurns', amount: 1 }),
+      record: ({ turns }) => {
+        this.meter({ modelTurns: turns })
+        // Not awaited: this runs in a stream's `finally`, and blocking there
+        // would hold the turn open on an accounting write. The cost of the
+        // isolate dying first is one under-reported turn.
+        this.flushMeters().catch(() => {})
+      },
+    })
     this.stub = new StubLlmAdapter({ reply: 'Hello from a Durable Object.', chunkSize: 6 })
-    ctx.llm.registerAdapter(['stub'], withCoalescing(this.stub, this.coalescing))
+    ctx.llm.registerAdapter(['stub'], metered(this.stub))
     if (this.env?.AI) {
       this.workersAi = new WorkersAiAdapter(this.env.AI)
-      ctx.llm.registerAdapter(['workers-ai'], withCoalescing(this.workersAi, this.coalescing))
+      ctx.llm.registerAdapter(['workers-ai'], metered(this.workersAi))
     }
     this.adapter = this.workersAi ?? this.stub
 
@@ -581,6 +610,12 @@ export class SessionAgentDO extends DurableObject {
       try {
         this.webFetch = new BrowserRunFetchProvider({
           browser: this.env.BROWSER,
+          // The provider already reads `x-browser-ms-used` off every response;
+          // this is where that number leaves the provider and becomes a bill.
+          // Kitesurf is free during its beta, so it is metered and capped
+          // separately from being charged -- when the beta ends nothing here
+          // has to change, and until then the cap still bounds a runaway loop.
+          onSpend: (ms) => this.meter({ browserMs: ms }),
           // Credentials pick the free road; WEB_TRANSPORT=binding declines it.
           // A deployment with no token has only the binding, which is why the
           // repo ships no WEB_TRANSPORT at all and nothing here is required.
@@ -705,9 +740,78 @@ export class SessionAgentDO extends DurableObject {
 
   // ---------------------------------------------------------------- transport
 
+  /**
+   * What this object has spent since it last told the ledger.
+   *
+   * Accumulated locally and flushed, rather than reported per event: a model
+   * turn yields hundreds of chunks and a fetch bills in fractions of a
+   * millisecond, and a Durable Object round trip per unit would cost more than
+   * the unit. The window of under-reporting is one flush, and an object that
+   * dies inside it under-bills rather than over-bills -- the right direction
+   * for a meter whose failure mode is refusing a paying user.
+   */
+  meter(spend) {
+    this.pending ??= {}
+    for (const [key, amount] of Object.entries(spend)) {
+      if (Number(amount) > 0) this.pending[key] = (this.pending[key] ?? 0) + Number(amount)
+    }
+  }
+
+  /**
+   * The EXEC binding, with a meter on it.
+   *
+   * One wrapper instead of a timer at each call site, because the call sites
+   * are not all here: cf-exec-provider gets the binding handed to it and calls
+   * it from inside the shell, fs and subprocess seams. A meter placed at the
+   * four sites this file happens to contain would have measured the probes and
+   * missed every tool call the agent makes -- a counter that is always low, and
+   * looks like a quiet user.
+   */
+  meteredExec() {
+    const exec = this.env?.EXEC
+    if (!exec) return exec
+    this.execProxy ??= {
+      fetch: async (...args) => {
+        const t0 = Date.now()
+        try {
+          return await exec.fetch(...args)
+        } finally {
+          // Billed for the instance being up, not for the syscall inside it,
+          // so wall time at this end is the honest approximation. Recorded in
+          // `finally` because a call that throws still ran the container.
+          this.meter({ containerMs: Date.now() - t0 })
+        }
+      },
+    }
+    return this.execProxy
+  }
+
+  async flushMeters() {
+    // One at a time. `record` fires this without awaiting, from inside a
+    // stream's `finally`, so several can arrive together; two concurrent
+    // flushes would each take the pending map and one of them would win.
+    if (this.flushing) return this.flushing
+    const spend = this.pending
+    if (!spend || Object.keys(spend).length === 0) return
+    this.pending = {}
+    this.flushing = this.writeMeters(spend).finally(() => { this.flushing = null })
+    return this.flushing
+  }
+
+  async writeMeters(spend) {
+    const result = await this.ledger('/spend', { spend })
+    // Put it back if the ledger could not be told, so a transient failure
+    // delays the accounting instead of erasing it.
+    if (result === null) this.meter(spend)
+  }
+
   async fetch(request) {
     const url = new URL(request.url)
     this.tenantId = request.headers.get('x-dsh-tenant') ?? this.tenantId
+    this.userId = request.headers.get('x-dsh-user') ?? this.userId
+    // Whatever the last request left pending. Cheap when there is nothing,
+    // and it bounds how long an unreported spend can sit here.
+    if (this.pending && Object.keys(this.pending).length) this.flushMeters().catch(() => {})
 
     // The browser's two downlinks, which are WebSockets and NOT the socket
     // below.
@@ -817,6 +921,61 @@ export class SessionAgentDO extends DurableObject {
     // BACK into us? Both halves matter: the first decides whether third-party
     // plugins are possible, the second decides whether they can be written as
     // ordinary Cordis plugins instead of as a second plugin model.
+    // The stargazer list, for the tenant object that holds it.
+    //
+    // Same shape as /plugin-store and /budget: SQLite only, no tree. It is on
+    // the path of every request the edge admits, so an object that assembled
+    // ninety plugins to answer "has this login starred the repo" would cost
+    // more than the agent it guards.
+    if (url.pathname === '/admission') {
+      const body = await request.json().catch(() => ({}))
+      const admission = new Admission({
+        sql: this.sql,
+        repo: this.env?.GITHUB_REPO || 'dorisgyl/dsh-cloud',
+        // Optional. Unauthenticated GitHub allows 60 requests an hour and a
+        // five-minute TTL spends twelve, so the default configuration needs no
+        // credential -- the token is for a deployment refreshing far more often
+        // or sharing an egress IP with other callers.
+        token: this.env?.GITHUB_TOKEN,
+        ttlMs: Number(this.env?.ADMISSION_TTL_MS) || 5 * 60_000,
+      })
+      return Response.json(await admission.isStargazer(body.login))
+    }
+
+    // What this user has spent, readable from the UI without a probe.
+    if (url.pathname === '/usage') {
+      const report = await this.ledger('', {})
+      return Response.json(report ?? { error: 'the ledger could not be reached' })
+    }
+
+    // A user's meters. Like /plugin-store, this never builds the tree: it is
+    // on the path of every request that spends anything, and an object that
+    // assembled ninety plugins to answer "how many turns today" would cost
+    // more than the thing it is metering.
+    if (url.pathname.startsWith('/budget')) {
+      this.isBudgetObject = true
+      const budget = this.localBudget()
+      const now = Date.now()
+      const body = await request.json().catch(() => ({}))
+
+      if (url.pathname === '/budget/check') {
+        return Response.json(budget.check(body.meter, now, body.amount ?? 1))
+      }
+      if (url.pathname === '/budget/spend') {
+        // A map, because a turn spends on several meters at once and one round
+        // trip per meter would trip the request limit it is reporting to.
+        const after = {}
+        for (const [meter, amount] of Object.entries(body.spend ?? {})) {
+          if (LIMITS[meter] && Number(amount) > 0) after[meter] = budget.spend(meter, now, Number(amount))
+        }
+        return Response.json({ recorded: after })
+      }
+      if (url.pathname === '/budget') {
+        return Response.json({ meters: budget.report(now), now: new Date(now).toISOString() })
+      }
+      return Response.json({ error: 'use /budget, /budget/check or /budget/spend' }, { status: 404 })
+    }
+
     // The raw plugin table of THIS object, with sources.
     //
     // Deliberately does not build the tree: the deployment store is a store,
@@ -1563,6 +1722,7 @@ export class SessionAgentDO extends DurableObject {
 
     try {
       const result = await this.runTurn(claim.text)
+      await this.flushMeters()
       this.queue.complete(claim.id, Date.now())
       this.broadcast({ type: 'turn', ok: result.ok, reply: result.reply, measurements: result.measurements })
     } catch (error) {
@@ -1639,7 +1799,7 @@ export class SessionAgentDO extends DurableObject {
       // buys nothing and costs container time.
       let response
       try {
-        response = await this.env.EXEC.fetch('http://exec/fs', {
+        response = await this.meteredExec().fetch('http://exec/fs', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ sandboxId: this.sandboxId, cwd: WORKSPACE_ROOT, payload }),
@@ -1942,6 +2102,54 @@ export class SessionAgentDO extends DurableObject {
     return reply({ ok: true, value: { sessionId } })
   }
 
+  /**
+   * This object's own ledger, for when it IS the user object.
+   *
+   * Separate from `budgetFor()` below, which is how a session object reaches
+   * somebody's ledger. Same class, same trick as the plugin store: a route
+   * that touches SQLite and never builds the tree, so the shared object stays
+   * cheap enough to be on every request's path.
+   */
+  localBudget() {
+    this.budget ??= new Budget({
+      sql: this.sql,
+      limits: {
+        requests: this.env?.LIMIT_REQUESTS_PER_MINUTE,
+        modelTurns: this.env?.LIMIT_MODEL_TURNS_PER_DAY,
+        containerMs: this.env?.LIMIT_CONTAINER_MS_PER_DAY,
+        browserMs: this.env?.LIMIT_BROWSER_MS_PER_DAY,
+      },
+    })
+    return this.budget
+  }
+
+  /**
+   * Ask the user's ledger a question, or tell it something.
+   *
+   * Failures are ADMITTED, not refused. A ledger that cannot be reached is an
+   * outage of the accounting, and refusing every request during one would turn
+   * a metering bug into a total outage. The cost of the other choice is
+   * bounded: it lasts as long as the ledger is unreachable, and it is recorded.
+   */
+  async ledger(path, body) {
+    if (this.isBudgetObject) return null
+    try {
+      const name = budgetObjectName(this.tenant, this.userId ?? 'unknown')
+      const id = this.env.SESSION.idFromName(name)
+      if (id.toString() === this.state.id.toString()) return null
+      const response = await this.env.SESSION.get(id).fetch(`http://session/budget${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-dsh-tenant': this.tenant },
+        body: JSON.stringify(body ?? {}),
+        signal: AbortSignal.timeout(3000),
+      })
+      return await response.json()
+    } catch (error) {
+      this.lateErrors?.push({ specifier: 'budget', error: String(error?.message ?? error) })
+      return null
+    }
+  }
+
   /** A registry over this object's own table, with no loading side. */
   pluginStore() {
     this.store ??= new PluginRegistry({ sql: this.sql })
@@ -1992,6 +2200,9 @@ export class SessionAgentDO extends DurableObject {
   }
 
   async runTurn(prompt) {
+    // No budget check here. It used to sit at this line and covered only this
+    // path; it now lives on the LLM adapter, which every path goes through.
+    // Leaving a copy would have counted a queued turn twice.
     const { ctx, assembleMs } = await this.ensureTree()
     const seqBefore = this.maxSeq()
     const callsBefore = this.adapter.calls

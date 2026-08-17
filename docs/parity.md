@@ -280,8 +280,13 @@ load without them.
 - **E2B execution tier** (design 10.6.2's third tier).
 - **The tenant object** (U3), and with it per-tenant settings and quotas.
 - **R2 cold storage** for the session log.
-- **Rate limiting, spend caps, admission control.** A public deployment pays for
-  whatever it is asked to do.
+- ~~**Rate limiting, spend caps, admission control.**~~ Done, `M6-limits.md`.
+  Four meters on a per-USER ledger (requests, model turns, container ms, browser
+  ms), because the session segment of an object name is caller-chosen and a
+  ledger attached there resets with a query parameter. Admission is a GitHub
+  login that has starred the repo — off by default, since a stranger who clones
+  this repo inherits its code, not its guest list. What remains: storage is on
+  no ledger, and limits are per user with no per-tenant ceiling above them.
 - **`/compact`** and **`web_search`**: registered, never exercised. `web_fetch`
   now is — the model fetched the Kitesurf documentation through it and answered
   from the page, including sections and figures that were not in its training

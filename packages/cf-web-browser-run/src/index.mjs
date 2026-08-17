@@ -190,6 +190,9 @@ export class BrowserRunFetchProvider {
     // the cost of this capability is a measurement rather than an estimate.
     this.browserMs = 0
     this.calls = 0
+    // Told to whoever is keeping the books. The provider counts for its own
+    // probe; the caller decides whether counting is also charging.
+    this.onSpend = config.onSpend
   }
 
   /**
@@ -235,7 +238,10 @@ export class BrowserRunFetchProvider {
     // Reported by the platform on every response. Recorded rather than logged,
     // so /web-probe can answer "what did this cost" with a number.
     const used = Number(response.headers?.get?.('X-Browser-Ms-Used'))
-    if (Number.isFinite(used)) this.browserMs += used
+    if (Number.isFinite(used)) {
+      this.browserMs += used
+      this.onSpend?.(used)
+    }
     // Every header, not a guessed one. Browser Run reports the bill in
     // `X-Browser-Ms-Used` and may or may not name the engine anywhere; asking
     // for two header names I invented and reporting `null` would be a
