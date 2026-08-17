@@ -4,7 +4,11 @@
   "version": "0.0.0",
   "packageManager": "pnpm@10.30.2",
   "scripts": {
-    "m0:bundle": "node scripts/m0-bundle.mjs"
+    "m0:bundle": "node scripts/m0-bundle.mjs",
+    "build:edge": "node scripts/build-edge.mjs",
+    "deploy:edge": "node scripts/build-edge.mjs && wrangler deploy --config units/edge/wrangler.jsonc",
+    "deploy:do": "node scripts/m0-bundle.mjs && wrangler deploy --config units/session-do/wrangler.jsonc",
+    "deploy": "npm run deploy:do && npm run deploy:edge"
   },
   "devDependencies": {
     "esbuild": "0.25.10",

@@ -208,6 +208,25 @@ export default {
       })
     }
 
+    // Which build is answering.
+    //
+    // "Is my change live" came up repeatedly, and once the answer was no while
+    // every symptom said yes: a build failed, `wrangler deploy` ran anyway
+    // because the shell chain did not stop, and the old bundle stayed up. A
+    // deployment that cannot name its own routes cannot answer that question,
+    // and every diagnosis after it is guesswork about the wrong code.
+    if (url.pathname === `${API_PREFIX}/version`) {
+      return Response.json({
+        unit: 'dsh-edge',
+        routes: ['/api/version', '/api/identity-probe', '/api/whoami', '/api/usage', '(everything else forwards to the session object)'],
+        admission: {
+          enabled: env.ADMISSION_REQUIRE_STAR === '1',
+          repo: env.GITHUB_REPO || 'dorisgyl/dsh-cloud',
+          admins: String(env.ADMIN_USERS ?? '').split(',').filter(Boolean).length,
+        },
+      })
+    }
+
     if (url.pathname === `${API_PREFIX}/whoami`) {
       return Response.json({
         tenant: claims.tenant, user: claims.user, kind: claims.kind,

@@ -1,6 +1,18 @@
 {
   // U1 dsh-edge — the only public-facing unit.
   "name": "dsh-edge",
+  // A BUILT artifact, not the source. `wrangler deploy` will happily ship a
+  // stale bundle: it does not know this file is generated, reports success,
+  // and returns a fresh Version ID for nine-hour-old code.
+  //
+  // That happened. Every edge change across one session -- an identity probe,
+  // a rate limiter, an admission gate, an extra forwarded header -- deployed
+  // "successfully" and none of it ran. It cost a wrong diagnosis too: a header
+  // that never shipped was read as "this identity provider has no email
+  // claim", which the Access logs later contradicted.
+  //
+  // Use `npm run deploy:edge`, which builds first. Same for the session
+  // object: `npm run deploy:do`.
   "main": "build/edge.bundle.js",
   "compatibility_date": "2026-08-01",
   "compatibility_flags": ["nodejs_compat"],
