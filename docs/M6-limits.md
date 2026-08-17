@@ -9,18 +9,24 @@ by default.
 > **Rate limiting, spend caps, admission control.** A public deployment pays for
 > whatever it is asked to do.
 
-There are now three meters, and they fail differently enough that one number
+There are now four meters, and they fail differently enough that one number
 cannot cover them.
 
 | meter | default | why this shape |
 |---|---|---|
-| `requests` | 60/minute | the cheap meter, to catch a loop before it reaches an expensive one |
+| `requests` | 240/minute | the cheap meter, to catch a loop before it reaches an expensive one |
 | `modelTurns` | 100/day | cents each |
 | `containerMs` | 15 min/day | billed by runtime — `sleep 600` costs what 600 seconds of work costs |
 | `browserMs` | 5 min/day | 150–900 ms per fetch |
 
 Every one is overridable (`LIMIT_REQUESTS_PER_MINUTE`, …), and **0 means off**:
 a deployment that has not set a cap should not have one invented for it.
+
+240 requests a minute, not the 60 it shipped with for an hour. 60 is one per
+second, and a web UI opening a page spends a burst — two socket upgrades, a
+describe, a handful of RPC calls — so that threshold throttled a human on page
+load. This meter catches a loop doing thousands; the gap between a person and a
+loop is wide enough that it need not be tight to sit inside it.
 
 ## The ledger hangs off the user, not the session
 
