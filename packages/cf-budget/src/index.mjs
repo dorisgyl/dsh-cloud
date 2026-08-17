@@ -24,7 +24,13 @@
 export const LIMITS = {
   // Requests are the cheap meter, and the one that catches a runaway loop
   // before it reaches an expensive one.
-  requests: { unit: 'requests', window: 'minute', fallback: 60 },
+  // 240/minute, not 60. The first number was one request per second, and a
+  // web UI opening a page spends a burst of them -- two socket upgrades, a
+  // describe, and a handful of RPC calls -- so it would have throttled a human
+  // on page load. This meter exists to catch a loop doing thousands, and the
+  // gap between a person and a loop is wide enough that the threshold does not
+  // need to be tight to sit inside it.
+  requests: { unit: 'requests', window: 'minute', fallback: 240 },
   modelTurns: { unit: 'turns', window: 'day', fallback: 100 },
   containerMs: { unit: 'ms of container runtime', window: 'day', fallback: 15 * 60_000 },
   browserMs: { unit: 'ms of browser time', window: 'day', fallback: 5 * 60_000 },
@@ -82,11 +88,27 @@ export class Budget {
   }
 
   /**
+   * Check and, if it fits, spend -- in one call.
+   *
+   * For callers that will not report back. The edge's request meter is one:
+   * it knows the cost up front (one request) and has nothing to add later, so
+   * splitting it put two round trips to the same Durable Object on the path of
+   * every request, to account for that request. Combining them also closes the
+   * gap between them, where two callers could both pass a check that only one
+   * of them had room for.
+   */
+  consume(meter, now, amount = 1) {
+    const verdict = this.check(meter, now, amount)
+    if (verdict.ok && !verdict.unlimited) this.spend(meter, now, amount)
+    return verdict
+  }
+
+  /**
    * Would `amount` more fit?
    *
-   * Separate from `spend` because the two happen at different times: a turn
-   * asks before it starts and reports after it ends, and what it actually cost
-   * is not known until then.
+   * Separate from `spend` for the callers that DO report back: a turn asks
+   * before it starts and tells the ledger afterwards, because what it actually
+   * cost in container and browser time is not known until then.
    */
   check(meter, now, amount = 1) {
     const limit = this.limits[meter]

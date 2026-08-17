@@ -959,7 +959,12 @@ export class SessionAgentDO extends DurableObject {
       const body = await request.json().catch(() => ({}))
 
       if (url.pathname === '/budget/check') {
-        return Response.json(budget.check(body.meter, now, body.amount ?? 1))
+        // `consume` when the caller will not report back (the edge's request
+        // meter); `check` when it will (a model turn, which reports what it
+        // actually cost). Getting this backwards double-counts or never counts.
+        return Response.json(body.consume
+          ? budget.consume(body.meter, now, body.amount ?? 1)
+          : budget.check(body.meter, now, body.amount ?? 1))
       }
       if (url.pathname === '/budget/spend') {
         // A map, because a turn spends on several meters at once and one round

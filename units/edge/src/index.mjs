@@ -282,7 +282,7 @@ export default {
         const verdict = await env.SESSION.get(ledgerId).fetch('http://session/budget/check', {
           method: 'POST',
           headers: { 'content-type': 'application/json', 'x-dsh-tenant': claims.tenant },
-          body: JSON.stringify({ meter: 'requests', amount: 1 }),
+          body: JSON.stringify({ meter: 'requests', amount: 1, consume: true }),
           signal: AbortSignal.timeout(3000),
         }).then((r) => r.json())
         if (verdict?.ok === false) {
@@ -291,12 +291,6 @@ export default {
             headers: { 'retry-after': String(Math.max(1, Math.ceil((Date.parse(verdict.resetsAt) - Date.now()) / 1000))) },
           })
         }
-        // Recorded after the check so a refused request is not also charged.
-        env.SESSION.get(ledgerId).fetch('http://session/budget/spend', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', 'x-dsh-tenant': claims.tenant },
-          body: JSON.stringify({ spend: { requests: 1 } }),
-        }).catch(() => {})
       } catch {
         // Admitted, not refused. A ledger that cannot be reached is an outage
         // of the accounting; refusing every request during one turns a
