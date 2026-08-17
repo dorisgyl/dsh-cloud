@@ -6,8 +6,9 @@
   "scripts": {
     "m0:bundle": "node scripts/m0-bundle.mjs",
     "build:edge": "node scripts/build-edge.mjs",
-    "deploy:edge": "node scripts/build-edge.mjs && wrangler deploy --config units/edge/wrangler.jsonc",
-    "deploy:do": "node scripts/m0-bundle.mjs && wrangler deploy --config units/session-do/wrangler.jsonc",
+    "deploy:edge": "node scripts/build-edge.mjs && npx wrangler deploy --config units/edge/wrangler.jsonc",
+    "deploy:do": "node scripts/m0-bundle.mjs && npx wrangler deploy --config units/session-do/wrangler.jsonc",
+    "deploy:exec": "npx wrangler deploy --config units/exec/wrangler.jsonc",
     "deploy": "npm run deploy:do && npm run deploy:edge"
   },
   "devDependencies": {
