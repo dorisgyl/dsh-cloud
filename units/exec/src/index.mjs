@@ -148,6 +148,48 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url)
 
+    // Where the 12 seconds go.
+    //
+    // One fs seam call was measured at 12292ms in production. Any fix for that
+    // is a guess until the time is attributed, and the candidates have very
+    // different fixes: SDK round trip (nothing to do here), process spawn (a
+    // resident helper), Node startup (a smaller runtime), or the eval of a
+    // ~7KB base64 script on every single call (cache it on disk).
+    //
+    // Each row is one `sandbox.exec`, so every row also pays the round trip;
+    // the DIFFERENCES are the attribution, not the absolute numbers.
+    if (url.pathname === '/fs-timing') {
+      const sandbox = sandboxFor(env, url.searchParams.get('sandboxId'))
+      const time = async (label, command) => {
+        const t0 = Date.now()
+        try {
+          const r = await sandbox.exec(command, { cwd: '/workspace' })
+          return { label, ms: Date.now() - t0, exitCode: r.exitCode ?? 0, out: String(r.stdout ?? '').slice(0, 60).trim() }
+        } catch (error) {
+          return { label, ms: Date.now() - t0, error: String(error?.message ?? error).slice(0, 120) }
+        }
+      }
+      // Warm first: the first exec into a cold container pays for the container.
+      const warmup = await time('warmup (excluded)', 'true')
+      return Response.json({
+        warmup,
+        rows: [
+          // The floor: one exec, one trivial process.
+          await time('true', 'true'),
+          // Add a shell that has to read and parse something.
+          await time('echo', 'echo hi'),
+          // Node startup alone, with no script to eval.
+          await time('node -e ""', 'node -e ""'),
+          // Node plus the eval of the real script, doing nothing.
+          await time('node + eval(script)', fsCommand({ op: 'stat', path: '/workspace' })),
+          // The same call twice in a row: a resident helper would make the
+          // second one cheap, a per-call process will not.
+          await time('node + eval(script) again', fsCommand({ op: 'stat', path: '/workspace' })),
+        ],
+        note: 'Differences attribute the cost; absolute numbers all include one SDK round trip.',
+      })
+    }
+
     if (url.pathname === '/health') {
       return Response.json({ ok: true, unit: 'dsh-exec', ops: Object.keys(handlers) })
     }

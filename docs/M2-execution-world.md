@@ -12,6 +12,40 @@ FINAL REPLY  "The command ran successfully ... confirming the container is runni
 The path is Access → edge → session object → alarm → tool call → U5 → container,
 and back.
 
+## What one fs call costs, measured
+
+`/api/fs-timing`, warm, each row one `sandbox.exec` so each includes one SDK
+round trip. The differences are the attribution:
+
+| | ms | attributable to |
+|---|---|---|
+| `true` | 64 | round trip and one trivial process — the floor |
+| `echo hi` | 65 | +1, shell parsing |
+| `node -e ""` | 123 | **+58, Node startup** |
+| `node -e eval(FS_SCRIPT)` + payload | 127 | **+4, an 8.7 KB command line and a 7 KB eval** |
+| the same call again | 129 | +2, nothing is cached and nothing needs to be |
+
+Cold start, once per sandbox: **2670 ms**.
+
+**One fs seam call is 127 ms.** This is written down because the number that
+prompted the measurement was 12292 ms, taken from a production log, and every
+theory it produced was wrong.
+
+The suspect was the shape of `fsCommand`: 8708 characters, 99% of them a base64
+copy of the whole fs worker, re-sent and re-evaluated on every `realpath`. It
+looks indefensible and it costs **4 ms**. Caching the script on disk — which
+`fs-script.mjs` explicitly rejected, to stay correct when a container is
+destroyed under us — would have bought nothing and given up that property.
+
+The 12 seconds was queueing. `ensureTree` had no in-flight guard, so one page
+load started three tree builds, each mounting the workspace through this call;
+none finished inside the client's patience; the browser retried and started
+three more. A 127 ms operation reaches 12 seconds under that, and the container
+never goes idle, so it never sleeps, so it stays slow.
+
+**A saturated queue and a slow operation produce the same number.** The fix was
+upstream of the seam, and nothing here needed changing.
+
 ## Shape
 
 `units/exec` (U5) is a thin front for the Sandbox SDK, reachable only over a

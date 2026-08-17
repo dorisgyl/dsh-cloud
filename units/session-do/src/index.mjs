@@ -788,6 +788,16 @@ export class SessionAgentDO extends DurableObject {
       return Response.json({ error: 'use GET, POST or DELETE' }, { status: 405 })
     }
 
+    // Attribute the fs seam's cost. dsh-exec is workers_dev:false and
+    // reachable only through this binding, so the probe needs a door here.
+    if (url.pathname === '/fs-timing') {
+      if (!this.env?.EXEC) return Response.json({ error: 'no EXEC binding' }, { status: 503 })
+      const response = await this.env.EXEC.fetch(
+        `http://exec/fs-timing?sandboxId=${encodeURIComponent(this.sandboxId)}`,
+      )
+      return new Response(response.body, { status: response.status, headers: { 'content-type': 'application/json' } })
+    }
+
     // What the documentation does not say, and what it cost to find out.
     //
     // Browser Run documents `?browser=kitesurf` for its REST endpoints and
