@@ -41,6 +41,27 @@ export async function assemble(Context, modules, options = {}) {
   const skip = new Set(options.skip ?? [])
 
   const ctx = new Context()
+
+  // Compose THROUGH the loader when there is one.
+  //
+  // Design 10.6 replaced the loader with a compile-time expansion, and the
+  // expansion is still what decides the set — but going through `ctx.plugin()`
+  // directly meant no plugin was a loader ENTRY, and everything that reads
+  // `loader.entries()` saw an empty deployment: the plugin inventory the
+  // settings panel renders, and the audit that tells a preset whether its
+  // subtree reached a usable state.
+  //
+  // `loader.create({name, config})` resolves `name` through the loader's
+  // `internal.import`, which cf-loader points at this same module map. So the
+  // set is identical and the plugins become inspectable, disableable entries
+  // rather than anonymous fibers.
+  // A hook for anything that must be installed on the bare context before any
+  // plugin loads — a log sink, most usefully, since a plugin that fails during
+  // load has already logged and moved on by the time assemble() returns.
+  options.onContext?.(ctx)
+
+  const loader = options.createLoader ? await options.createLoader(ctx) : undefined
+
   const registered = []
   const libraries = []
   const skipped = []
@@ -50,7 +71,21 @@ export async function assemble(Context, modules, options = {}) {
   for (const [specifier, mod] of Object.entries(modules)) {
     if (skip.has(specifier)) { skipped.push(specifier); continue }
     const found = findPlugin(mod)
+    // Still filtered here rather than left to the loader: a module that is not
+    // plugin-shaped would become an entry that fails to unwrap, turning a
+    // library into a reported error on every boot.
     if (!found) { libraries.push(specifier); continue }
+
+    if (loader) {
+      try {
+        await loader.create({ name: specifier, ...(config[specifier] === undefined ? {} : { config: config[specifier] }) })
+        registered.push({ specifier, fiber: undefined, origin: found.origin })
+      } catch (error) {
+        failed.push({ specifier, phase: 'register', error: String(error?.message ?? error) })
+      }
+      continue
+    }
+
     let fiber
     try {
       fiber = ctx.plugin(found.value, config[specifier])
@@ -65,6 +100,9 @@ export async function assemble(Context, modules, options = {}) {
   // `inject` is unmet never settles, so each fiber gets a bounded wait and is
   // reported as dormant rather than hanging the boot.
   await Promise.all(registered.map(async (entry) => {
+    // A loader entry has no fiber to await here; `create` already awaited its
+    // update, and readiness is reported by the entry audit instead.
+    if (!entry.fiber) return
     try {
       await Promise.race([
         entry.fiber,
@@ -80,6 +118,7 @@ export async function assemble(Context, modules, options = {}) {
   return {
     ctx,
     report: {
+      composedVia: loader ? 'loader' : 'direct',
       registered: registered.map(e => e.specifier),
       libraries,
       skipped,

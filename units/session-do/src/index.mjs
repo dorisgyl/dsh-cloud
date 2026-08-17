@@ -78,6 +78,25 @@ const SKIP = [
   // symptom was `session.history` answering "expected object, received
   // undefined" with an empty path.
   '@deepseek-ai/dsh-attachment',
+  // Eleven, and found only by composing through the loader: registering both
+  // dsh-compaction and dsh-compaction-basic collides with
+  // 'service "compaction" has been registered at <CompactionEngine>'. Direct
+  // registration swallowed that, so compaction has been running with the base
+  // seam and no engine.
+  '@deepseek-ai/dsh-compaction',
+  // Not a root-tree plugin at all: `tools.presentAs()` requires an
+  // agent-scoped context, and upstream mounts this inside a preset's standing
+  // scope. Registering it at the root fails every boot with "requires a scoped
+  // context (agent.ctx)". It belongs with agent presets, which this deployment
+  // does not have yet.
+  '@deepseek-ai/dsh-agent-tool-presentation',
+  // A genuine incompatibility, kept visible rather than worked around:
+  // "the mounted bash executor does not confine (no sandboxMode) -- presets
+  // bundle a sandbox mode". cf-exec-provider reports no sandboxMode BECAUSE the
+  // container is the boundary and nothing narrower is enforced inside it, so
+  // permission presets have nothing to fence. Claiming a mode to satisfy this
+  // plugin would be the dishonest fix.
+  '@deepseek-ai/dsh-permission-presets',
   // Needs `{ backend }` config naming a live backend, so it is registered after
   // cf-storage-do rather than expanded blind.
   '@deepseek-ai/dsh-storage-domain',
@@ -132,6 +151,9 @@ const SKIP = [
 // should: the execution world is where files live.
 const WORKSPACE_ROOT = '/workspace'
 
+/** Cordis fiber states are numeric; 2 is the loaded, running one. */
+const ACTIVE_FIBER = 2
+
 // Config for plugins whose schema has required fields. cf-settings-do will
 // supply these from TenantDO once it exists.
 const CONFIG = {
@@ -172,6 +194,31 @@ const CONFIG = {
     fallbackMaxWords: 8,
     fallbackMaxBytes: 128,
     maxTitleBytes: 256,
+  },
+
+  // Six plugins that were failing silently until the tree was composed through
+  // the loader. Every one of them wanted required config that nothing supplied,
+  // and every one of them therefore did nothing at all -- most visibly
+  // dsh-tool-todo, whose absence is why no `todo` tool ever appeared in the
+  // schemas the model is offered.
+  //
+  // Upstream ships these with no defaults on purpose: the values are policy,
+  // and a library that guesses policy is worse than one that refuses to start.
+  // These are this deployment's answers.
+  '@deepseek-ai/dsh-tool-todo': { allowParallelInProgress: false },
+  '@deepseek-ai/dsh-agent-tool-presentation': { mode: 'native' },
+  '@deepseek-ai/dsh-message-feedback': { maxNoteBytes: 4096 },
+  '@deepseek-ai/dsh-session-projection-cache': { writeEveryEvents: 50, writeIntervalMs: 30_000 },
+  '@deepseek-ai/dsh-session-title-first-prompt-llm': {
+    targetWords: 8,
+    targetCjkCharacters: 16,
+    maxInputBytes: 4096,
+    maxOutputTokens: 64,
+    timeoutMs: 15_000,
+  },
+  '@deepseek-ai/dsh-plan-mode': {
+    section: 'Plan mode is on. Investigate and propose a plan; do not modify '
+      + 'files or run commands that change state until the plan is accepted.',
   },
 }
 
@@ -262,22 +309,8 @@ export class SessionAgentDO extends DurableObject {
   async ensureTree() {
     if (this.tree) return this.tree
     const t0 = Date.now()
-    const { ctx, report } = await assemble(Context, modules, {
-      skip: SKIP, config: CONFIG, settleMs: 1500,
-    })
-
-    // The two seams upstream leaves empty on workerd. Both need the Durable
-    // Object's SQLite handle, which only exists here.
-    await ctx.plugin(cfStorageDo, { name: 'do-sqlite', sql: this.sql })
-    await ctx.plugin(CfSessionPersistenceDo, { sql: this.sql })
-    await ctx.plugin(CfSettingsDo, { sql: this.sql })
-    await ctx.plugin(CfCredentialsDo, { env: this.env, sql: this.sql })
-    // Search over this object's own log. Required by the client protocol, so it
-    // could no longer be deferred; see the class for why it searches for real
-    // rather than answering with an empty page.
-    // The third-party registry is constructed before the loader, because the
-    // loader surfaces its plugins to `pluginInventory` and therefore has to be
-    // able to ask it.
+    // The registry is constructed before the tree, because the loader surfaces
+    // its plugins to `pluginInventory` and therefore has to be able to ask it.
     this.plugins = new PluginRegistry({
       sql: this.sql,
       loader: this.env?.LOADER,
@@ -292,12 +325,61 @@ export class SessionAgentDO extends DurableObject {
       }),
     })
 
-    // Runtime composition over the bundled set. Registered early, because the
-    // plugins that inject `loader` are already waiting for it.
-    await ctx.plugin(cfLoader, {
-      modules,
-      foreignEntries: () => this.plugins.inventoryEntries(),
+    const { ctx, report } = await assemble(Context, modules, {
+      skip: SKIP,
+      config: CONFIG,
+      settleMs: 1500,
+      // Every upstream plugin becomes a loader entry, so the deployment is
+      // inspectable as a plugin tree rather than as an opaque set of fibers.
+      // Capture plugin failures, which otherwise only ever reach a logger.
+      //
+      // Cordis routes a failed plugin to `ctx.logger.error(...)` and keeps no
+      // field for it, so a failed fiber can be SEEN (state 3) and its reason
+      // cannot be READ. On a Worker there is no console to scroll, which makes
+      // the reason unrecoverable rather than merely inconvenient.
+      onContext: (ctx) => {
+        this.logged = []
+        try {
+          ctx.logger.exporter({
+            levels: { base: 1 },
+            colors: 0,
+            export: (message) => {
+              if (message?.type !== 'error') return
+              const args = message.args ?? []
+              this.logged.push({
+                name: message.name,
+                text: args.map((a) => String(a?.stack ?? a?.message ?? a)).join(' ').slice(0, 300),
+              })
+            },
+          })
+        } catch (error) {
+          this.logged.push({ name: 'cf-boot', text: `logger exporter refused: ${String(error?.message ?? error)}` })
+        }
+      },
+      createLoader: async (ctx) => {
+        // Await the fiber before reading the service. `ctx.plugin()` returns a
+        // fiber, not a loaded plugin, so reading `ctx.get('loader')` straight
+        // after it yielded undefined -- and assemble() quietly fell back to
+        // direct registration, which works, boots clean, and leaves the plugin
+        // inventory empty. A fallback that succeeds is the hardest kind to
+        // notice.
+        await ctx.plugin(cfLoader, {
+          modules,
+          foreignEntries: () => this.plugins.inventoryEntries(),
+        })
+        return ctx.get('loader')
+      },
     })
+
+    // The two seams upstream leaves empty on workerd. Both need the Durable
+    // Object's SQLite handle, which only exists here.
+    await ctx.plugin(cfStorageDo, { name: 'do-sqlite', sql: this.sql })
+    await ctx.plugin(CfSessionPersistenceDo, { sql: this.sql })
+    await ctx.plugin(CfSettingsDo, { sql: this.sql })
+    await ctx.plugin(CfCredentialsDo, { env: this.env, sql: this.sql })
+    // Search over this object's own log. Required by the client protocol, so it
+    // could no longer be deferred; see the class for why it searches for real
+    // rather than answering with an empty page.
     await ctx.plugin(CfSessionQueryDo, { sql: this.sql, sessionId: this.sessionId })
     await ctx.plugin(CfAttachmentsDo, { sql: this.sql })
 
@@ -1627,6 +1709,38 @@ export class SessionAgentDO extends DurableObject {
             // Nothing was collecting these, so they simply did not exist as far
             // as any report was concerned.
             lateErrors: this.lateErrors ?? [],
+            // Which composition path the boot actually took. The loader path
+            // and the direct path both produce a working tree, so nothing else
+            // in this report distinguishes them.
+            composedVia: this.tree.report.composedVia,
+            // Why a loader entry is not active. Composing through the loader
+            // made seven pre-existing failures visible that direct
+            // registration had swallowed -- `dsh-tool-todo` among them, which
+            // is why no `todo` tool ever appeared. A phase alone says which
+            // entries are broken; this says what broke them.
+            logged: (this.logged ?? []).slice(0, 20),
+            entryErrors: (() => {
+              try {
+                const rows = []
+                for (const entry of this.tree.ctx.loader?.entries?.() ?? []) {
+                  // `state` is a numeric enum, not a string. Comparing it to
+                  // 'active' matched nothing and reported every entry as
+                  // broken — a filter that never fires looks exactly like a
+                  // system with no failures until you read the list.
+                  const state = entry.fiber?.state
+                  if (state === undefined || state === ACTIVE_FIBER) continue
+                  const error = entry.fiber?.error ?? entry.fiber?.reason ?? entry._error
+                  rows.push({
+                    name: entry.options?.name?.replace('@deepseek-ai/', ''),
+                    state,
+                    error: error === undefined ? null : String(error?.message ?? error).slice(0, 200),
+                  })
+                }
+                return rows
+              } catch (error) {
+                return [{ error: String(error?.message ?? error) }]
+              }
+            })(),
             plugins: this.plugins?.available
               ? { installed: this.plugins.list(), ...(this.pluginReport ?? {}) }
               : { installed: [], note: 'no LOADER binding: third-party plugins are unavailable' },
