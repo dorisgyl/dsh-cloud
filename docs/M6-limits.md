@@ -1,8 +1,8 @@
 # M6 — who may use this, and how much
 
 **Date**: 2026-08-17
-**Status**: rate limits and spend caps enforced. Admission built, gate off
-pending one measurement.
+**Status**: rate limits and spend caps enforced. Admission complete, gate off
+by default.
 
 `docs/parity.md` carried this line from before there was anything to spend:
 
@@ -108,19 +108,40 @@ Three defaults, each for a reason:
 hiccup into "nobody has starred this", locking out every legitimate user at once
 and looking exactly like a correctly enforced policy.
 
-### The one thing not yet measured
+### The question that removed a dependency
 
 Cloudflare documents that `get-identity` returns an `idp` block and does not
-document its shape per provider, so **where a GitHub login lives is a guess**.
-`LOGIN_PATHS` in `units/edge/src/index.mjs` walks eight candidates and
-`/api/identity-probe` prints the real thing; whichever key is right belongs at
-the front of that list with the rest deleted.
+document its shape per provider. The first version therefore read the login from
+a named key — a guess — and the gate could not be switched on until somebody
+logged in through GitHub and read the real shape back. A finished feature,
+waiting on a measurement.
 
-Until then, failing to resolve a login **refuses**. Both silent failures were
-available — `undefined` compared against a login admits nobody, compared against
-`undefined` admits everybody — and only one of them is safe to get wrong. The
-refusal carries `identityShape`: key names only, never values, because an
-operator needs the keys to fix it and a stranger reading a 403 must not receive
+It did not need the measurement. **The gate's question is not "what is this
+person's GitHub login" but "does this identity belong to a stargazer"**, and the
+second can be answered without knowing which key holds the first:
+
+```js
+candidateLogins(identity)      // every login-shaped string, at any depth
+  ∩ stargazers                 // the set
+```
+
+The set is what makes it safe. A false positive needs a stargazer whose login is
+character-for-character some unrelated field of a different person's identity,
+and GitHub's login grammar — alphanumeric with single interior hyphens, at most
+39 characters — excludes emails, long UUIDs and names with spaces before the
+intersection is even taken. Email local parts are included as candidates,
+because they cost nothing unless they are also in the set.
+
+Verified against five identity shapes with five different field names
+(`idp.github_login`, `idp.name`, a nested `custom.profile.handle`, an email
+local part, and a stranger's), all resolved correctly, and a 36-character UUID
+does not match.
+
+The matched candidate is reported, so the answer stays auditable and the
+undocumented field name becomes an observation rather than a prerequisite —
+`/api/identity-probe` still prints the whole identity when someone wants to
+look. A refusal carries `identityShape`: key names only, never values, because
+an operator needs the keys and a stranger reading a 403 must not receive
 somebody's email address.
 
 ## Turning it on, in the order that cannot lock you out
@@ -137,7 +158,10 @@ Step 5 is the one that opens the door to the internet. Steps 1–4 affect only t
 operator.
 
 ## Not done
-- **The gate is unmeasured against a real GitHub identity.** See above.
+- **The gate has not been exercised against a live GitHub login.** The
+  resolution logic is verified against five identity shapes offline, and the
+  stargazer list against a real repo, but no real Access GitHub identity has
+  passed through it end to end.
 - **`get-identity` is called per request** when the gate is on. It should be
   cached against the user object the edge already contacts for the request
   meter; today it is an extra round trip on every admitted request.

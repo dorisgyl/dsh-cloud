@@ -31,40 +31,6 @@ function sessionIdFrom(url) {
 // which is either "not signed in" or "this deployment is not protected at all".
 // The second is a deployment mistake, not a user error, and answering it with a
 // bare 401 wastes the self-deployer's afternoon.
-/**
- * Where a GitHub login might live in an Access identity.
- *
- * Ordered, and every one of them a guess: Cloudflare documents that
- * `get-identity` returns an `idp` block and does not document its shape per
- * provider. `/api/identity-probe` prints the real thing, and whichever key
- * turns out to be right belongs at the front of this list with the others
- * deleted.
- *
- * Until then the list is walked and a failure to resolve is REFUSED, not
- * admitted. Both silent failures were available here -- comparing `undefined`
- * against a login admits nobody, comparing it against `undefined` admits
- * everybody -- and only one of them is safe to get wrong.
- */
-const LOGIN_PATHS = [
-  ['idp', 'github_login'],
-  ['idp', 'login'],
-  ['idp', 'username'],
-  ['idp', 'nickname'],
-  ['idp', 'preferred_username'],
-  ['custom', 'login'],
-  ['login'],
-  ['nickname'],
-]
-
-function resolveGithubLogin(identity) {
-  for (const path of LOGIN_PATHS) {
-    let value = identity
-    for (const key of path) value = value?.[key]
-    if (typeof value === 'string' && value.length > 0) return { login: value, foundAt: path.join('.') }
-  }
-  return { login: undefined, foundAt: undefined }
-}
-
 /** Key names only, never values: this goes into an error a stranger can read. */
 function shapeOf(value, depth = 2) {
   if (value === null || typeof value !== 'object') return typeof value
@@ -103,26 +69,34 @@ async function admit(request, env, claims) {
     return { ok: false, reason: `could not read the Access identity: ${String(error?.message ?? error)}` }
   }
 
-  const { login, foundAt } = resolveGithubLogin(identity)
-  if (!login) {
-    return {
-      ok: false,
-      reason: 'no GitHub login in this Access identity',
-      hint: 'the key is not one this deployment knows; add it to LOGIN_PATHS in units/edge/src/index.mjs',
-      // The SHAPE, not the values. An operator needs the key names to fix
-      // this, and a stranger reading a 403 must not receive somebody's email.
-      identityShape: shapeOf(identity),
-    }
-  }
-
+  // The whole identity, not a field picked out of it.
+  //
+  // The first version read the login from a named key, and Cloudflare
+  // documents that `get-identity` returns an `idp` block without documenting
+  // its shape per provider -- so the key was a guess, and the gate could not be
+  // switched on until somebody logged in and read it back. That is a feature
+  // waiting on a measurement it does not actually need.
+  //
+  // The gate's question is not "what is this person's login" but "does this
+  // identity belong to a stargazer", and that can be answered without knowing
+  // which key holds the answer. cf-admission collects every login-shaped string
+  // and asks whether any is in the set; the set is what keeps it safe, and the
+  // matched candidate is reported so the answer stays auditable.
   const admission = env.SESSION.get(env.SESSION.idFromName(`tenant/${claims.tenant}/admission`))
   const verdict = await admission.fetch('http://session/admission', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-dsh-tenant': claims.tenant },
-    body: JSON.stringify({ login }),
+    body: JSON.stringify({ identity }),
   }).then((r) => r.json()).catch((error) => ({ ok: false, reason: String(error?.message ?? error) }))
 
-  return { ...verdict, login, foundAt, repo: env.GITHUB_REPO || 'dorisgyl/dsh-cloud' }
+  // The shape only when refused, and key names only: an operator needs them to
+  // see what the identity looked like, and a stranger reading a 403 must not
+  // receive somebody else's email address.
+  return {
+    ...verdict,
+    repo: env.GITHUB_REPO || 'dorisgyl/dsh-cloud',
+    ...(verdict.ok ? {} : { identityShape: shapeOf(identity) }),
+  }
 }
 
 const NOT_PROTECTED = {

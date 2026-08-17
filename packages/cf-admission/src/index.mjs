@@ -33,6 +33,47 @@ const PER_PAGE = 100
  */
 const MAX_PAGES = 20
 
+/**
+ * GitHub's own login grammar: alphanumeric and single hyphens, no leading or
+ * trailing hyphen, at most 39 characters.
+ */
+const LOGIN_SHAPE = /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i
+
+/**
+ * Every string in an identity that could be a GitHub login.
+ *
+ * This exists to delete a dependency, not to be clever. The first version read
+ * the login from a named field, and Cloudflare documents that `get-identity`
+ * returns an `idp` block without documenting its shape per provider -- so the
+ * field name was a guess, and the whole gate could not be switched on until
+ * somebody logged in and read it back.
+ *
+ * The question the gate actually asks is not "what is this person's login" but
+ * "does this identity belong to a stargazer". That one can be answered without
+ * knowing which key holds the answer: collect every login-shaped string and ask
+ * whether any of them is in the set.
+ *
+ * The set is what makes this safe. A false positive needs a stargazer whose
+ * login is character-for-character equal to some unrelated field of a different
+ * person's identity -- and emails, UUIDs with more than 39 characters, and
+ * display names with spaces are all excluded by the grammar before that.
+ */
+export function candidateLogins(value, out = new Set(), depth = 4) {
+  if (typeof value === 'string') {
+    if (LOGIN_SHAPE.test(value)) out.add(value.toLowerCase())
+    // The local part of an email is a common place for a login to appear, and
+    // including it costs nothing: it only matters if it is also in the set.
+    const local = /^([^@\s]+)@[^@\s]+$/.exec(value)?.[1]
+    if (local && LOGIN_SHAPE.test(local)) out.add(local.toLowerCase())
+    return out
+  }
+  if (depth === 0 || value === null || typeof value !== 'object') return out
+  for (const entry of Array.isArray(value) ? value : Object.values(value)) {
+    candidateLogins(entry, out, depth - 1)
+  }
+  return out
+}
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS admission (
   k TEXT PRIMARY KEY,
@@ -125,6 +166,30 @@ export class Admission {
     return {
       ok: has,
       reason: has ? undefined : `"${login}" has not starred ${this.repo}`,
+      stargazers: state.logins.length,
+      truncated: state.truncated,
+      refreshedAt: state.refreshedAt,
+      staleBecause: state.error ?? undefined,
+    }
+  }
+
+  /**
+   * Does this identity belong to a stargazer, whatever field says so.
+   *
+   * Reports WHICH candidate matched, so the answer is auditable and the
+   * undocumented field name becomes an observation rather than a prerequisite.
+   */
+  async admits(identity, now = Date.now()) {
+    const state = await this.state(now)
+    const candidates = [...candidateLogins(identity)]
+    const matched = candidates.find((candidate) => state.logins.includes(candidate))
+    return {
+      ok: Boolean(matched),
+      matched,
+      candidatesTried: candidates.length,
+      reason: matched
+        ? undefined
+        : `none of the ${candidates.length} identifiers in this identity has starred ${this.repo}`,
       stargazers: state.logins.length,
       truncated: state.truncated,
       refreshedAt: state.refreshedAt,

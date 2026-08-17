@@ -939,7 +939,12 @@ export class SessionAgentDO extends DurableObject {
         token: this.env?.GITHUB_TOKEN,
         ttlMs: Number(this.env?.ADMISSION_TTL_MS) || 5 * 60_000,
       })
-      return Response.json(await admission.isStargazer(body.login))
+      // `admits` when the caller sends a whole identity, `isStargazer` when it
+      // already knows a login. The edge sends the identity, because which field
+      // carries a GitHub login is undocumented per provider.
+      return Response.json(body.identity
+        ? await admission.admits(body.identity)
+        : await admission.isStargazer(body.login))
     }
 
     // What this user has spent, readable from the UI without a probe.
