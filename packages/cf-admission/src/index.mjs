@@ -40,6 +40,47 @@ const MAX_PAGES = 20
 const LOGIN_SHAPE = /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i
 
 /**
+ * Keys whose values describe the SESSION, not the person.
+ *
+ * Measured, not imagined. A real Access identity carried, among other things:
+ *
+ *   idp.type          "onetimepin"
+ *   amr               ["onetimepin"]
+ *   devicePosture.*   rule_name "Gateway", "WARP"
+ *   geo.country       "US"
+ *   auth_status       "NONE"
+ *
+ * Every one of those satisfies GitHub's login grammar, and `warp`, `gateway`
+ * and `us` are real GitHub accounts. If any of them ever starred this repo,
+ * every identity on earth would match one and the gate would be open while
+ * appearing shut.
+ *
+ * The earlier claim that "the set is what makes it safe" held for emails and
+ * long UUIDs and did not hold for enumerated values. Real data said so.
+ */
+const STRUCTURAL_KEYS = new Set([
+  'type', 'amr', 'rule_name', 'country', 'auth_status', 'version', 'account_id',
+  'devicePosture', 'geo', 'common_name', 'service_token_id', 'service_token_status',
+  'is_warp', 'is_gateway', 'gateway_account_id', 'device_id', 'device_sessions', 'ip',
+])
+
+/**
+ * Was this identity authenticated by GitHub at all?
+ *
+ * The first of the two admission conditions, and until now it was assumed
+ * rather than checked: the gate went straight to "has this starred the repo"
+ * and would have accepted a one-time-PIN identity that happened to carry a
+ * matching string. Access reports the provider in `idp.type` and `amr` -- an
+ * OTP login reads "onetimepin" in both, which is how this was found.
+ */
+export function isGithubIdentity(identity) {
+  const type = String(identity?.idp?.type ?? '').toLowerCase()
+  if (type === 'github') return true
+  const amr = identity?.amr
+  return Array.isArray(amr) && amr.some((m) => String(m).toLowerCase() === 'github')
+}
+
+/**
  * Every string in an identity that could be a GitHub login.
  *
  * This exists to delete a dependency, not to be clever. The first version read
@@ -58,7 +99,8 @@ const LOGIN_SHAPE = /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i
  * person's identity -- and emails, UUIDs with more than 39 characters, and
  * display names with spaces are all excluded by the grammar before that.
  */
-export function candidateLogins(value, out = new Set(), depth = 4) {
+export function candidateLogins(value, out = new Set(), depth = 4, key = undefined) {
+  if (key !== undefined && STRUCTURAL_KEYS.has(key)) return out
   if (typeof value === 'string') {
     if (LOGIN_SHAPE.test(value)) out.add(value.toLowerCase())
     // The local part of an email is a common place for a login to appear, and
@@ -68,8 +110,12 @@ export function candidateLogins(value, out = new Set(), depth = 4) {
     return out
   }
   if (depth === 0 || value === null || typeof value !== 'object') return out
-  for (const entry of Array.isArray(value) ? value : Object.values(value)) {
-    candidateLogins(entry, out, depth - 1)
+  if (Array.isArray(value)) {
+    for (const entry of value) candidateLogins(entry, out, depth - 1)
+    return out
+  }
+  for (const [childKey, entry] of Object.entries(value)) {
+    candidateLogins(entry, out, depth - 1, childKey)
   }
   return out
 }
@@ -180,6 +226,15 @@ export class Admission {
    * undocumented field name becomes an observation rather than a prerequisite.
    */
   async admits(identity, now = Date.now()) {
+    // Condition one, checked first and on its own. "Signed in with GitHub" and
+    // "has starred the repo" are two requirements, and collapsing them into the
+    // second let an identity from any provider through on a lucky string.
+    if (!isGithubIdentity(identity)) {
+      return {
+        ok: false,
+        reason: `this identity was authenticated by "${identity?.idp?.type ?? 'an unknown provider'}", not GitHub`,
+      }
+    }
     const state = await this.state(now)
     const candidates = [...candidateLogins(identity)]
     const matched = candidates.find((candidate) => state.logins.includes(candidate))

@@ -114,6 +114,42 @@ Three defaults, each for a reason:
 hiccup into "nobody has starred this", locking out every legitimate user at once
 and looking exactly like a correctly enforced policy.
 
+### Two conditions, and one of them was not being checked
+
+The gate reads as "signed in with GitHub, and starred the repo". The first
+version checked only the second, and treated the first as something Access had
+already arranged. It had not: Access was configured to accept GitHub *and* the
+one-time PIN it already had, so an OTP identity reached the star check intact.
+
+`isGithubIdentity` now checks `idp.type` and `amr` before anything else. Both
+read `"onetimepin"` on a real OTP login, which is how this was found — from a
+live identity, not from reasoning.
+
+### The set is not always the safety
+
+`candidateLogins` collects every login-shaped string in an identity, and the
+argument for that was "a false positive needs a stargazer whose login equals an
+unrelated field of someone else's identity". A real identity was measured and
+carried:
+
+```
+idp.type         "onetimepin"
+amr              ["onetimepin"]
+devicePosture.*  rule_name "Gateway", "WARP"
+geo.country      "US"
+auth_status      "NONE"
+```
+
+`warp`, `gateway` and `us` are real GitHub accounts. If any of them had ever
+starred this repo, **every identity on earth would have matched one**, and the
+gate would have been open while appearing shut — the exact failure this design
+was supposed to avoid, reintroduced by the mechanism meant to avoid it.
+
+The argument held for emails and long UUIDs and did not hold for enumerated
+values. `STRUCTURAL_KEYS` now excludes the keys that describe a session rather
+than a person, and the same measured identity now yields three candidates
+instead of a dozen: an email local part and two UUIDs.
+
 ### The question that removed a dependency
 
 Cloudflare documents that `get-identity` returns an `idp` block and does not
