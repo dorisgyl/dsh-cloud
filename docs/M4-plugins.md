@@ -153,6 +153,20 @@ upstream — not a smaller number of hooks, but a boundary at the agent loop.
 
 ## Two scopes: the deployment's and yours
 
+Verified end to end. `notes` installed once at deployment scope, then a **new
+session** — a different Durable Object, its own empty plugin table, no part in
+the install — reported:
+
+```
+/api/state  tools   ["notes__list_notes", "notes__save_note"]
+/api/plugins        {id: "notes", scope: "deployment", rows: 1}
+```
+
+The session that performed the install proves nothing on its own: its tree is
+dropped and rebuilt by the install itself. A session that was not there is the
+only observer whose answer can only have come from the shared object.
+
+
 A plugin installed through `/api/plugins` was, at first, visible to exactly one
 person — and nobody decided that. Session objects are named from verified Access
 claims (`tenant/<t>/user/<u>/session/<s>`), so the plugin table is per user by
