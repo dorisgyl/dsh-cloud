@@ -193,6 +193,20 @@ export class BrowserRunFetchProvider {
   }
 
   /**
+   * Which road the NEXT call will take, from the provider that will take it.
+   *
+   * The first version of this answer was recomputed by the caller from
+   * `env.WEB_TRANSPORT`, and when the selection rule flipped -- credentials
+   * now mean Kitesurf unless declined -- the caller kept applying the old one
+   * and reported "binding (default)" for a provider about to use REST. A
+   * report that derives a fact a second time will eventually derive it
+   * differently.
+   */
+  get plannedTransport() {
+    return this.rest ? 'rest-kitesurf' : 'binding-default'
+  }
+
+  /**
    * Cheap, local, and no network -- the seam requires all three, because this
    * runs during provider selection on every call.
    *

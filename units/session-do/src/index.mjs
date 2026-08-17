@@ -335,6 +335,24 @@ export class SessionAgentDO extends DurableObject {
    */
   async ensureTree() {
     if (this.tree) return this.tree
+    // One build at a time, and every other caller waits on it.
+    //
+    // `this.tree` is only assigned when the build FINISHES, so until then this
+    // guard let every concurrent caller start its own. A browser opens two
+    // WebSockets and posts `host.describe` on load, so one page load was three
+    // builds -- each mounting the workspace, each mounting it through a
+    // 12-second container call. When those could not finish inside the client's
+    // patience the browser retried, and the retry started three more. The
+    // container was never idle, so it never slept, so it stayed slow: the
+    // failure fed itself.
+    //
+    // Cleared on both paths, because a failed build has to stay retryable
+    // rather than be cached as a permanently broken deployment.
+    this.treeBuilding ??= this.buildTree().finally(() => { this.treeBuilding = null })
+    return this.treeBuilding
+  }
+
+  async buildTree() {
     const t0 = Date.now()
     // Logged because a slow tree build presents as a WebSocket that never
     // opens, and `wrangler tail` reports that as `canceled` with no exception
@@ -816,7 +834,12 @@ export class SessionAgentDO extends DurableObject {
             transport: provider.lastTransport,
             fellBackBecause: provider.restFallbackReason,
             headers: provider.lastHeaders,
-            head: result.body.content.slice(0, 160),
+            // Long enough to judge a RENDER, not just a status code. The
+            // fallback covers Kitesurf refusing; it cannot cover Kitesurf
+            // returning a shell of a page, which reaches the model as a
+            // confident wrong answer. On a JS-rendered target the two engines'
+            // `bytes` and `head` are the only evidence of that difference.
+            head: result.body.content.slice(0, 500),
           }
         } catch (error) {
           return { asked: selection ?? 'default', ok: false, wallMs: Date.now() - t0, code: error?.code, error: String(error?.message ?? error).slice(0, 400) }
@@ -830,10 +853,17 @@ export class SessionAgentDO extends DurableObject {
         target,
         // What a real web_fetch uses right now, as opposed to what the rows
         // below can be made to do on request.
-        live: {
-          configured: this.env.WEB_TRANSPORT ?? 'binding (default)',
-          lastUsed: this.webFetch?.lastTransport ?? 'not used yet this instance',
-        },
+        // Asked of the provider, not recomputed from env. Recomputing is how
+        // this line came to report 'binding (default)' for a provider that was
+        // configured for REST.
+        live: this.webFetch
+          ? {
+              willUse: this.webFetch.plannedTransport,
+              lastUsed: this.webFetch.lastTransport ?? 'no web_fetch yet in this instance',
+              credentials: Boolean(this.env.CF_ACCOUNT_ID && this.env.BROWSER_RUN_TOKEN),
+              declined: this.env.WEB_TRANSPORT === 'binding',
+            }
+          : 'no provider: the BROWSER binding is missing',
         attempts: {
           // The row that matters now: REST with a token, which is the only
           // road to Kitesurf. `transport` says which one actually ran, so a
@@ -1413,21 +1443,23 @@ export class SessionAgentDO extends DurableObject {
       // time 79ms, no exception: a saturated pool of three containers was
       // indistinguishable from a dead agent.
       //
-      // 15s is above a genuine cold start and below the client's own patience,
-      // so a busy execution world now surfaces as an error with a cause instead
-      // of a UI that never loads.
+      // 8s, lowered from 15s. 15 was under the client's patience but not by
+      // enough: a container answering in 12s meant every attempt was abandoned
+      // by the browser AFTER the work had been paid for, and the retry queued
+      // more of it. A deadline that expires once the caller has already left
+      // buys nothing and costs container time.
       let response
       try {
         response = await this.env.EXEC.fetch('http://exec/fs', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ sandboxId: this.sandboxId, cwd: WORKSPACE_ROOT, payload }),
-          signal: AbortSignal.timeout(15_000),
+          signal: AbortSignal.timeout(8_000),
         })
       } catch (error) {
         if (error?.name === 'TimeoutError' || /aborted|timed? ?out/i.test(String(error?.message))) {
           throw new Error(
-            `the execution world did not answer within 15s (op: ${payload?.op}). `
+            `the execution world did not answer within 8s (op: ${payload?.op}). `
             + 'This is what a container pool at max_instances looks like from here: '
             + 'requests queue rather than fail. Check `wrangler containers list`.',
           )
