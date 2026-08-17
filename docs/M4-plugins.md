@@ -99,16 +99,59 @@ Two more fences:
 where a permission model attaches when there is a second extension point to
 permit.
 
-## Not done
+## What a plugin can register, and what it can ask for
 
-- **`PluginHost` exposes nothing yet.** `echo` only. Tools are registered
-  through `/describe`, so no plugin has needed a harness capability yet; the
-  first one that wants to read a file or query the session log is what should
-  decide the second method, not a guess.
-- **One extension point.** Tools. Registering a seam, an LLM provider or a
-  system-prompt section is the same mechanism and none of it is written.
-- **No permissions.** Every plugin gets the same (empty) capability face. The
-  id is carried but nothing consults it.
+Two different faces, in opposite directions, and conflating them is the most
+likely way to misread this design:
+
+| | defined by | direction |
+|---|---|---|
+| what a plugin can **register** | the `ctx` in `runner.mjs` | plugin declares, harness collects |
+| what a plugin can **ask the harness to do** | `PluginHost`'s methods | plugin calls, harness executes |
+
+Today:
+
+```
+register   ctx.tools.register        ctx.commands.register    ctx.systemPrompt.section
+ask        harness.readFile          harness.writeFile        harness.listDir
+           harness.runCommand        harness.echo
+```
+
+Capabilities are granted per plugin at install time and default to **none**:
+
+```json
+{"id": "notes", "source": "…", "permissions": ["fs:read", "fs:write", "shell"]}
+```
+
+A refusal names the missing grant:
+
+```
+plugin "notes" was not granted "shell". Reinstall it with permissions: ["shell"]
+```
+
+## Against upstream's 44 services
+
+An in-process upstream plugin injects any of ~44 live services. A plugin here
+gets 3 registration points and 5 capability methods. The gap is not evenly
+spread, and where it falls is the point:
+
+- **Data in, data out** — `fs`, `shell`, `sessionQuery`, `settings`, `storage`,
+  `web`, `skills`, `jobs` … roughly 20 services. These cross fine; the work is
+  the authorisation, not the transport. Three are done.
+- **Registration** — `tools`, `commands`, `systemPrompt`, `sessionProjections`,
+  `llm`, `userQuestions` … about 7. These cross as declarations plus a
+  re-entrant callback. Three are done. `sessionProjections` would fire per
+  event and `llm` needs streams, so both are real work rather than more of the
+  same.
+- **Live objects and synchronous contracts** — `sessions`, `agents`,
+  `agentLoop`, `loader`, `invariants`, `typert`, `terminals`,
+  `subprocess.spawn`, and `ctx.effect`. About 12, and they **cannot** cross.
+
+So: **a plugin can extend the harness's periphery and cannot reach its core.**
+That is the honest summary of the difference from "everything is a plugin"
+upstream — not a smaller number of hooks, but a boundary at the agent loop.
+
+## Not done
 - **No signing, no provenance, no versioning beyond a content hash.** Installing
   a plugin means trusting whoever wrote it, and today the only real fence is
   that it has no network.
