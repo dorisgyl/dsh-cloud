@@ -170,6 +170,26 @@ export class PluginRegistry {
     return response.json()
   }
 
+  /**
+   * The installed plugins in the shape `pluginInventory` reads.
+   *
+   * Not loader entries — these are loaded by this registry — but the panel's
+   * question is "what plugins are in this deployment", and answering it with
+   * nothing while a plugin is registering tools would be the wrong kind of
+   * accurate. `fiber` is left undefined because there is none; the panel
+   * renders that as a null phase rather than a fabricated lifecycle.
+   */
+  *inventoryEntries() {
+    for (const row of this.list()) {
+      yield {
+        id: `plugin:${row.id}`,
+        disabled: !row.enabled,
+        fiber: undefined,
+        options: { name: `${row.id} (third-party, rev ${row.rev})` },
+      }
+    }
+  }
+
   /** What one plugin provides, asked of the plugin itself. */
   async describe(id) {
     const row = this.row(id)

@@ -275,9 +275,29 @@ export class SessionAgentDO extends DurableObject {
     // Search over this object's own log. Required by the client protocol, so it
     // could no longer be deferred; see the class for why it searches for real
     // rather than answering with an empty page.
+    // The third-party registry is constructed before the loader, because the
+    // loader surfaces its plugins to `pluginInventory` and therefore has to be
+    // able to ask it.
+    this.plugins = new PluginRegistry({
+      sql: this.sql,
+      loader: this.env?.LOADER,
+      capability: (pluginId, permissions) => this.ctx.exports.PluginHost({
+        props: {
+          pluginId,
+          permissions,
+          sandboxId: this.sandboxId,
+          cwd: WORKSPACE_ROOT,
+          sessionObject: this.sessionId,
+        },
+      }),
+    })
+
     // Runtime composition over the bundled set. Registered early, because the
     // plugins that inject `loader` are already waiting for it.
-    await ctx.plugin(cfLoader, { modules })
+    await ctx.plugin(cfLoader, {
+      modules,
+      foreignEntries: () => this.plugins.inventoryEntries(),
+    })
     await ctx.plugin(CfSessionQueryDo, { sql: this.sql, sessionId: this.sessionId })
     await ctx.plugin(CfAttachmentsDo, { sql: this.sql })
 
@@ -355,19 +375,6 @@ export class SessionAgentDO extends DurableObject {
     // isolates. Attached AFTER the tree, because their tools register into a
     // context that has to exist first, and because a plugin failing must not
     // stop the harness from booting -- an installed plugin is not a dependency.
-    this.plugins = new PluginRegistry({
-      sql: this.sql,
-      loader: this.env?.LOADER,
-      capability: (pluginId, permissions) => this.ctx.exports.PluginHost({
-        props: {
-          pluginId,
-          permissions,
-          sandboxId: this.sandboxId,
-          cwd: WORKSPACE_ROOT,
-          sessionObject: this.sessionId,
-        },
-      }),
-    })
     if (this.plugins.available) {
       this.pluginReport = await this.plugins.attachTools(ctx)
     }

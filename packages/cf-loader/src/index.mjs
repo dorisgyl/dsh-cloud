@@ -56,6 +56,24 @@ export function apply(ctx, config) {
     },
   }
 
+  // Third-party plugins are loaded by cf-plugin-host, not by this loader, so
+  // `entries()` would not see them — and `pluginInventory`, which is what the
+  // settings panel reads, would report a deployment with no plugins while one
+  // was demonstrably registering tools.
+  //
+  // They are merged in rather than hidden, because the question the panel
+  // answers is "what plugins are in this deployment", and a third-party plugin
+  // is one. They carry no fiber, and the shape says so (`fiber: undefined`
+  // renders as a null phase) rather than inventing a lifecycle they do not
+  // have.
+  if (typeof config?.foreignEntries === 'function') {
+    const own = loader.entries.bind(loader)
+    loader.entries = function* entries() {
+      yield* own()
+      yield* config.foreignEntries()
+    }
+  }
+
   return loader
 }
 
