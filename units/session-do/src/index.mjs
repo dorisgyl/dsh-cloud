@@ -936,15 +936,37 @@ export class SessionAgentDO extends DurableObject {
         // five-minute TTL spends twelve, so the default configuration needs no
         // credential -- the token is for a deployment refreshing far more often
         // or sharing an egress IP with other callers.
-        token: this.env?.GITHUB_TOKEN,
+        // `|| undefined` so an empty secret is treated as absent rather than
+        // sent as `Bearer `. A secret can exist and be empty -- `wrangler
+        // secret put` creates the binding whether or not the paste landed --
+        // and the two states produced identical behaviour until this line.
+        token: this.env?.GITHUB_TOKEN || undefined,
         ttlMs: Number(this.env?.ADMISSION_TTL_MS) || 5 * 60_000,
       })
       // `admits` when the caller sends a whole identity, `isStargazer` when it
       // already knows a login. The edge sends the identity, because which field
       // carries a GitHub login is undocumented per provider.
-      return Response.json(body.identity
+      const verdict = body.identity
         ? await admission.admits(body.identity)
-        : await admission.isStargazer(body.login))
+        : await admission.isStargazer(body.login)
+      // Whether a token was READ, not whether one was set. A Durable Object
+      // holds the env it was constructed with, so a secret added while the
+      // object is alive does not reach it until the object is replaced -- and
+      // the symptom is an unauthenticated rate-limit message that looks like
+      // the token is wrong rather than absent.
+      return Response.json({
+        ...verdict,
+        // Three states, not two. "absent" and "present but empty" behaved
+        // identically -- no authorization header either way, so GitHub replied
+        // with its unauthenticated rate-limit message, which reads as a token
+        // problem when there was no token at all. `wrangler secret list` showed
+        // the name and `Boolean(value)` showed false, and only printing both
+        // together made the empty string visible.
+        token: this.env?.GITHUB_TOKEN === undefined
+          ? 'not set'
+          : (this.env.GITHUB_TOKEN.length === 0 ? 'SET BUT EMPTY -- the paste did not land' : `set (${this.env.GITHUB_TOKEN.length} chars)`),
+        envKeys: Object.keys(this.env ?? {}).sort(),
+      })
     }
 
     // What this user has spent, readable from the UI without a probe.

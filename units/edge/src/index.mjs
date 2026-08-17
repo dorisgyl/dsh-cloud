@@ -227,6 +227,43 @@ export default {
       })
     }
 
+    // What the gate decides, and by which route -- without enforcing it.
+    //
+    // Needed because the two ways in are indistinguishable from outside: an
+    // operator who is in ADMIN_USERS is admitted whether or not they have
+    // starred anything, so "I got in" proves nothing about the star check.
+    // `via` is the field that separates them.
+    if (url.pathname === `${API_PREFIX}/admission-check`) {
+      const verdict = await admit(request, env, claims)
+      return Response.json({
+        enforced: env.ADMISSION_REQUIRE_STAR === '1',
+        verdict,
+        note: verdict.via === 'ADMIN_USERS'
+          ? 'admitted by the operator bypass, NOT by a star. Remove yourself from ADMIN_USERS, or use another GitHub account, to exercise the star requirement.'
+          : 'this is the star check answering.',
+      })
+    }
+
+    // What the gate decides, and by which route -- without enforcing it.
+    //
+    // Two reasons this is not just "turn it on and see". Turning it on locks
+    // out whoever is currently signed in if they do not pass, which is a poor
+    // way to learn that they do not. And the two ways in are indistinguishable
+    // from outside: an operator in ADMIN_USERS is admitted whether or not they
+    // have starred anything, so "I got in" says nothing about the star check.
+    // `via` is the field that separates them.
+    if (url.pathname === `${API_PREFIX}/admission-check`) {
+      const verdict = await admit(request, env, claims)
+      return Response.json({
+        enforced: env.ADMISSION_REQUIRE_STAR === '1',
+        wouldAdmit: verdict.ok,
+        verdict,
+        note: verdict.via === 'ADMIN_USERS'
+          ? 'admitted by the operator bypass, NOT by a star -- this says nothing about the star check'
+          : 'this is the star check answering',
+      })
+    }
+
     if (url.pathname === `${API_PREFIX}/whoami`) {
       return Response.json({
         tenant: claims.tenant, user: claims.user, kind: claims.kind,

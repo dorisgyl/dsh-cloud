@@ -17,8 +17,19 @@
 //
 // Stargazers are listed rather than asked per user because the authoritative
 // call -- GET /user/starred/{owner}/{repo} -- needs the USER's OAuth token, and
-// Access hands us an identity, not a token. The public list needs no credential
-// at all, which keeps admission inside ADR-12's zero-configuration property.
+// Access hands us an identity, not a token.
+//
+// This shipped claiming the list needed no credential and therefore kept
+// admission inside ADR-12's zero-configuration property. That was wrong, and
+// wrong in a familiar way: `GET /repos/{owner}/{repo}` was tested, answered 200
+// unauthenticated, and was treated as evidence about a different endpoint.
+//
+//   GET /repos/cloudflare/workers-sdk              200
+//   GET /repos/cloudflare/workers-sdk/stargazers   401 Requires authentication
+//
+// So admission costs one credential: `GITHUB_TOKEN`, which needs no scopes at
+// all to read public repositories. The zero-configuration default survives by
+// the gate being off unless asked for, not by the gate being free.
 
 const API = 'https://api.github.com'
 const PER_PAGE = 100
@@ -270,6 +281,29 @@ export class Admission {
       }
     }
     const state = await this.state(now)
+
+    // A list that has NEVER loaded is not a policy, it is an outage, and
+    // saying "you have not starred this" would be a lie with a plausible fix
+    // attached: the user goes and stars the repo, is still refused, and the
+    // real cause sits in a field nobody reads.
+    //
+    // Measured the hard way. `GET /repos/{owner}/{repo}` answers 200
+    // unauthenticated and `GET /repos/{owner}/{repo}/stargazers` answers 401
+    // "Requires authentication" -- for any repo, including public ones with a
+    // six-figure star count. This package shipped claiming the list needed no
+    // credential, on the strength of having tested the OTHER endpoint.
+    if (state.refreshedAt === 0) {
+      return {
+        ok: false,
+        githubId,
+        reason: `the stargazer list for ${this.repo} has never loaded, so nobody can be admitted`,
+        hint: 'GET /stargazers requires authentication; set GITHUB_TOKEN (a token with no scopes '
+          + 'can read public repositories) or disable ADMISSION_REQUIRE_STAR',
+        cause: state.error ?? 'unknown',
+        stargazers: 0,
+      }
+    }
+
     const matched = state.logins.find((entry) => entry.id === githubId)
     return {
       ok: Boolean(matched),

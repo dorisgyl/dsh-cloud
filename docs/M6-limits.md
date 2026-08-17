@@ -110,6 +110,43 @@ Three defaults, each for a reason:
   absurd default for an open-source project.
 - **`GITHUB_REPO` is a variable**, for the same reason.
 
+### The list needs a credential, and finding that out took four wrong answers
+
+`GET /stargazers` returns **401 Requires authentication** — for every repo,
+including public ones with six-figure star counts. `GET /repos/{owner}/{repo}`
+does not, and testing the second was treated as evidence about the first. This
+package shipped saying the list was free.
+
+What the gate then reported, in order:
+
+| what it said | what was true |
+|---|---|
+| `169990062 has not starred this` | the list had never loaded at all |
+| `401 Requires authentication` | no `GITHUB_TOKEN` was set |
+| `403 rate limit exceeded for 172.71.147.220` | the secret existed and was **empty** |
+| `169990062 has not starred this` | correct, at last |
+
+Three of those four are the same failure in different clothes: a component
+answering confidently about a state it was not in.
+
+- **"Has not starred" when the list was empty.** A refusal that names a
+  plausible fix sends the operator to apply it; they star the repo, are still
+  refused, and the real cause sits in a field nobody reads. Now a list with
+  `refreshedAt === 0` refuses with *"the stargazer list has never loaded, so
+  nobody can be admitted"*, which is a different sentence about a different
+  world.
+- **A secret that exists and is empty.** `wrangler secret put` creates the
+  binding whether or not the paste lands, and an empty token takes the same
+  branch as an absent one — no authorization header, so GitHub answers with its
+  *unauthenticated* rate-limit text, which reads as a token problem when there
+  was no token. `wrangler secret list` showed the name; `Boolean(value)` showed
+  false; neither alone located it. The report now has three states and prints
+  the token's **length**.
+- **A Durable Object holding a stale `env`.** Suspected before it was measured,
+  and wrong: printing `Object.keys(this.env)` showed `GITHUB_TOKEN` present in
+  the very object that said it had no token. That is what turned the search from
+  "which env is this" to "what is in this env".
+
 **A GitHub outage keeps the old list.** Emptying the set on error would turn a
 hiccup into "nobody has starred this", locking out every legitimate user at once
 and looking exactly like a correctly enforced policy.
