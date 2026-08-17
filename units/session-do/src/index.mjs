@@ -335,6 +335,12 @@ export class SessionAgentDO extends DurableObject {
   async ensureTree() {
     if (this.tree) return this.tree
     const t0 = Date.now()
+    // Before anything that can fail. It used to be initialised after assemble,
+    // which meant the one failure that runs DURING assemble -- reading the
+    // deployment plugin store -- pushed into `undefined` through a `?.` and
+    // vanished. A store that cannot be read then looked exactly like a store
+    // with nothing in it.
+    this.lateErrors = []
     // The registry is constructed before the tree, because the loader surfaces
     // its plugins to `pluginInventory` and therefore has to be able to ask it.
     this.plugins = new PluginRegistry({
@@ -343,19 +349,28 @@ export class SessionAgentDO extends DurableObject {
       // Deployment-wide plugins, fetched from the shared store. Skipped when
       // THIS object is the store, which would otherwise ask itself.
       deploymentRows: async () => {
+        const name = deploymentStoreName(this.tenant)
         try {
-          const name = deploymentStoreName(this.tenant)
           const id = this.env.SESSION.idFromName(name)
-          if (id.toString() === this.state.id.toString()) return []
+          if (id.toString() === this.state.id.toString()) {
+            this.storeStatus = { name, self: true, rows: 0 }
+            return []
+          }
           const response = await this.env.SESSION.get(id).fetch('http://session/plugin-store', {
             headers: { 'x-dsh-tenant': this.tenant },
           })
           const body = await response.json()
-          return body?.rows ?? []
+          const rows = body?.rows ?? []
+          // Reported rather than inferred. "No deployment plugins" and "the
+          // shared object was never asked" produce the same empty list, and
+          // telling them apart from the outside is otherwise impossible.
+          this.storeStatus = { name, status: response.status, rows: rows.length }
+          return rows
         } catch (error) {
+          this.storeStatus = { name, error: String(error?.message ?? error) }
           // A store that cannot be read must not stop a session from booting:
           // the user's own plugins, and the harness itself, do not depend on it.
-          this.lateErrors?.push({ specifier: 'deployment-plugins', error: String(error?.message ?? error) })
+          this.lateErrors.push({ specifier: 'deployment-plugins', error: String(error?.message ?? error) })
           return []
         }
       },
@@ -477,7 +492,6 @@ export class SessionAgentDO extends DurableObject {
     // dsh-workspace publishes `workspaceRegistry`, which dsh-host-apiproxy --
     // the whole client protocol -- injects. Awaited here so a failure is an
     // error with a message rather than a service that silently never appears.
-    this.lateErrors = []
     const workspace = modules['@deepseek-ai/dsh-workspace']
     try {
       await ctx.plugin(workspace.default ?? workspace)
@@ -735,7 +749,7 @@ export class SessionAgentDO extends DurableObject {
           enabled: Boolean(row.enabled),
           bytes: source?.length,
         }))
-        return Response.json({ installed: resolved, ...(this.pluginReport ?? {}) })
+        return Response.json({ installed: resolved, store: this.storeStatus, ...(this.pluginReport ?? {}) })
       }
 
       if (request.method === 'DELETE') {
@@ -1564,9 +1578,16 @@ export class SessionAgentDO extends DurableObject {
     const user = request.headers.get('x-dsh-user')
     const email = request.headers.get('x-dsh-email')
     if (!admins.some((admin) => admin === user || (email && admin === email))) {
+      // The count, not the list. "The secret is not reaching this object" and
+      // "the secret is here and does not contain you" are different problems
+      // with different fixes, and one 403 answering both is how the last hour
+      // went. Both identifiers are echoed for the same reason.
       return Response.json({
         error: 'not-an-admin',
-        hint: `"${email || user || 'unknown'}" is not in ADMIN_USERS; deployment-wide installs are refused.`,
+        saw: { user, email },
+        adminsConfigured: admins.length,
+        hint: `"${email || user || 'unknown'}" is not in ADMIN_USERS (${admins.length} entr`
+          + `${admins.length === 1 ? 'y' : 'ies'} configured); deployment-wide installs are refused.`,
       }, { status: 403 })
     }
     return undefined
