@@ -84,35 +84,41 @@ The first REST call billed 2140ms and is excluded: it was a cold browser
 session, and the row that runs first pays for it. That correction mattered —
 2140 against 136 is 14×, and the warm number is 2.9×.
 
-**Kitesurf meters ~2.9× MORE, not 3–7× less.** The docs are not wrong; the
-mapping was. "3–7× less CPU and memory" is a resource claim, and the meter is
-**time**. A browser that uses less CPU and takes longer bills more of it. The
-other half of the claim — 1.7–1.8× slower — shows up as ~2.5× and is roughly
-right.
+### The comparison above is invalid for cost, and it decided the default anyway
 
-Whether those metered milliseconds are actually *charged* during the beta is not
-visible from here: `x-browser-ms-used` is reported identically either way. Only
-a bill can answer it.
+For one release these numbers put the default on the binding. That was wrong,
+and the error is worth keeping because it is a subtle one: **the two columns are
+not the same kind of number.** Kitesurf is free while in beta, so its metered
+milliseconds are a *reading*; the binding's are a *bill*. Subtracting one from
+the other answers a question nobody asked. For cost, free beats any positive
+number at every volume.
 
-### Why the default stayed on the binding
+Two supporting arguments were also wrong:
 
-The Workers Paid plan includes 10 browser-hours per month. At the binding's
-~150–300ms per fetch that is on the order of **a hundred thousand fetches a
-month** before anything is billed at all. At this deployment's volume both roads
-are free, so Kitesurf's beta exemption buys nothing — and costs ~2.5× the
-latency on every fetch the model makes.
+- *"Both are free at this volume anyway"* — the 10 included browser-hours are
+  per **account**, and that reasoning quietly assumed this deployment stays a
+  one-person demo. It is meant to be self-deployed by strangers and opened to
+  their users.
+- *"Kitesurf meters 2.9× more, not 3–7× less"* — this contradicts nothing. The
+  documented claim is **CPU and memory**; `x-browser-ms-used` is **time**, and
+  no CPU or memory figure is observable from inside a Worker at all. The
+  measurement never tested what it was cited against.
 
-So the credential does not decide it. `WEB_TRANSPORT` does:
+What the numbers do establish is the latency price: **~2.5× slower per fetch**,
+close to the documented 1.7–1.8×. That is what the cheaper road costs.
+
+### The switch
 
 ```sh
-npx wrangler secret put CF_ACCOUNT_ID          # both are needed by the choice,
-npx wrangler secret put BROWSER_RUN_TOKEN      # neither of them makes it
-wrangler.jsonc: "vars": { "WEB_TRANSPORT": "kitesurf" }
+npx wrangler secret put CF_ACCOUNT_ID
+npx wrangler secret put BROWSER_RUN_TOKEN      # permission: Browser Run: Edit
 ```
 
-Having a token must not be the same as choosing to use it. Wired the other way,
-configuring a credential would have made every model fetch 2.5× slower as a
-side effect — which is not a decision anyone would have made on purpose.
+Credentials present means Kitesurf: there is no reason to configure a Browser
+Run token except to use it. A deployment that would rather pay money than wait
+sets `WEB_TRANSPORT=binding` to decline. A deployment with no token has only
+the binding, which is why the repo ships no `WEB_TRANSPORT` at all and this
+whole section is optional.
 
 A REST failure falls back to the binding rather than failing the fetch, because
 a beta service with per-account limits will refuse sometimes and losing a

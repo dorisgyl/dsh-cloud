@@ -541,11 +541,9 @@ export class SessionAgentDO extends DurableObject {
       try {
         this.webFetch = new BrowserRunFetchProvider({
           browser: this.env.BROWSER,
-          // Three things, and all three are needed to leave the default: the
-          // choice, plus the two credentials it needs. WEB_TRANSPORT is the
-          // choice, and it is separate on purpose -- measured, Kitesurf is
-          // ~2.5x slower per fetch, so making a credential imply it would slow
-          // every model fetch down as a side effect of configuration.
+          // Credentials pick the free road; WEB_TRANSPORT=binding declines it.
+          // A deployment with no token has only the binding, which is why the
+          // repo ships no WEB_TRANSPORT at all and nothing here is required.
           transport: this.env.WEB_TRANSPORT,
           accountId: this.env.CF_ACCOUNT_ID,
           token: this.env.BROWSER_RUN_TOKEN,

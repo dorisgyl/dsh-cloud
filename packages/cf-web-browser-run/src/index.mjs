@@ -62,29 +62,41 @@
 // The REST endpoint DOES have `?browser=kitesurf`, at the price of an API
 // token, so this provider has two transports:
 //
-//   binding   zero configuration, default browser        DEFAULT
-//   rest      one API token, Kitesurf, free during beta  opt in
+//   rest      one API token, Kitesurf, free during beta   PREFERRED
+//   binding   zero configuration, default browser         fallback, and the
+//                                                         only road with no
+//                                                         credentials
 //
-// Measured on example.com, warm (the first REST call was a 2140ms cold start
-// and is excluded):
+// Measured on example.com, warm (the first REST call was a 2140ms cold start,
+// excluded -- the row that runs first pays for it):
 //
-//   kitesurf (rest)     876, 899 billed ms      1612, 1024ms wall
+//   kitesurf (rest)     876, 899 metered ms     1612, 1024ms wall
 //   default (binding)   136, 489, 297           291, 611, 468ms wall
 //
-// Kitesurf meters ~2.9x MORE, not the 3-7x less the docs advertise -- and the
-// docs are not wrong, the mapping was. "3-7x less CPU and memory" is a
-// resource claim; the meter is TIME. A browser that uses less CPU and takes
-// longer bills more of it. The other half of the claim, 1.7-1.8x slower, shows
-// up as ~2.5x and is roughly right.
+// Those numbers chose the binding, for one release, and that was wrong. They
+// are not comparable: Kitesurf is free while in beta, so its metered
+// milliseconds are a READING and the binding's are a BILL. Subtracting one
+// from the other answers a question nobody asked. For cost -- which is the
+// priority here -- free beats any positive number at any volume, and the 10
+// browser-hours a paid plan includes are per ACCOUNT, so "we will never reach
+// it" was an assumption about this deployment staying a one-person demo. It is
+// meant to be self-deployed by strangers.
 //
-// Whether those metered milliseconds are actually charged during the beta is
-// NOT visible here: `x-browser-ms-used` is reported identically either way, so
-// only a bill can answer it. That uncertainty is exactly why the faster,
-// zero-configuration road stays the default and Kitesurf is opted into.
+// Nor do these numbers touch the documented claim. "3-7x less CPU and memory"
+// is a resource claim; `x-browser-ms-used` is TIME, and no CPU or memory figure
+// is observable from inside a Worker at all. The measurement never tested what
+// it was cited against.
 //
-// A REST failure falls back to the binding rather than failing the fetch, and
-// says so in `lastTransport` -- a silent fallback would recreate the bug this
-// file was renamed for: believing one engine ran while another did.
+// What it does establish is the latency cost: ~2.5x slower per fetch, close to
+// the documented 1.7-1.8x. That is the price of the cheaper road, and
+// `WEB_TRANSPORT=binding` buys it back for a deployment that would rather pay
+// money than wait.
+//
+// A REST failure falls back to the binding rather than failing the fetch --
+// Kitesurf is beta with per-account limits, so refusals are ordinary and losing
+// a model's fetch to one would be worse. `lastTransport` records which road ran
+// and `restFallbackReason` why, because a silent fallback would recreate the
+// bug this file was renamed for: believing one engine ran while another did.
 import { WebError } from '@deepseek-ai/dsh-web'
 
 /**
@@ -161,11 +173,14 @@ export class BrowserRunFetchProvider {
     // and sending a field that does nothing would leave a false claim in every
     // request forever.
     this.selection = config.selection ?? null
-    // Credentials are necessary but NOT sufficient. Having a token must not be
-    // the same as choosing to use it: on the numbers above, that would make
-    // every model fetch 2.5x slower as a side effect of configuring a
-    // credential, which is not a decision anyone would have made on purpose.
-    this.rest = config.transport === 'kitesurf' && config.accountId && config.token
+    // Credentials present means Kitesurf, because Kitesurf is the free road
+    // and there is no reason to configure a Browser Run token except to use
+    // it. `WEB_TRANSPORT=binding` opts back out; anything else, including
+    // unset, prefers Kitesurf when it can.
+    //
+    // A token without an account id cannot build a URL and an account id
+    // without a token cannot authenticate, so both or neither.
+    this.rest = config.transport !== 'binding' && config.accountId && config.token
       ? { accountId: config.accountId, token: config.token }
       : null
     // Which road the last call actually took. Not inferred from configuration:
