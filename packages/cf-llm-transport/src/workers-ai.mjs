@@ -78,8 +78,26 @@ function toChatTools(tools) {
   if (!tools?.length) return undefined
   return tools.map((tool) => ({
     type: 'function',
-    function: { name: tool.name, description: tool.description, parameters: tool.parameters },
+    function: {
+      name: tool.name,
+      description: tool.description,
+      // A guard, not a fix for anything seen: upstream's own parameterless
+      // tools (`get_goal`, `job_list`) already arrive as
+      // {type:'object', properties:{}} and the API accepts them. What it
+      // rejects is a parameters value that is not a JSON Schema at all, and
+      // when it does it names only an index -- "Tool 10 function has invalid
+      // 'parameters'" -- which is why /tool-schemas exists.
+      parameters: normaliseParameters(tool.parameters),
+    },
   }))
+}
+
+/** A JSON Schema object, whatever shape the seam handed over. */
+function normaliseParameters(parameters) {
+  if (parameters && typeof parameters === 'object' && parameters.type === 'object') {
+    return { ...parameters, properties: parameters.properties ?? {} }
+  }
+  return { type: 'object', properties: {}, required: [] }
 }
 
 /** Read an SSE body into `data:` payload strings. */

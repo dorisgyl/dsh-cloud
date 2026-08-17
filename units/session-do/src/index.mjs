@@ -358,8 +358,14 @@ export class SessionAgentDO extends DurableObject {
     this.plugins = new PluginRegistry({
       sql: this.sql,
       loader: this.env?.LOADER,
-      capability: (pluginId) => this.ctx.exports.PluginHost({
-        props: { pluginId, sessionObject: this.sessionId },
+      capability: (pluginId, permissions) => this.ctx.exports.PluginHost({
+        props: {
+          pluginId,
+          permissions,
+          sandboxId: this.sandboxId,
+          cwd: WORKSPACE_ROOT,
+          sessionObject: this.sessionId,
+        },
       }),
     })
     if (this.plugins.available) {
@@ -578,7 +584,7 @@ export class SessionAgentDO extends DurableObject {
           return Response.json({ error: 'body is not JSON' }, { status: 400 })
         }
         try {
-          const installed = this.plugins.install(body?.id, body?.source)
+          const installed = this.plugins.install(body?.id, body?.source, body?.permissions)
           this.tree = null
           return Response.json({ installed })
         } catch (error) {
@@ -808,6 +814,19 @@ export class SessionAgentDO extends DurableObject {
       const from = Number(url.searchParams.get('from') ?? 0)
       const limit = Math.min(Number(url.searchParams.get('limit') ?? 200), 1000)
       return Response.json(this.history(from, limit))
+    }
+
+    // The exact tool schemas handed to the adapter. When a provider rejects one
+    // it names an INDEX ("Tool 10 function has invalid 'parameters'"), which is
+    // useless without the list it is indexing into.
+    if (url.pathname === '/tool-schemas') {
+      const { ctx } = await this.ensureTree()
+      const schemas = ctx.tools.schemas()
+      return Response.json(schemas.map((t, index) => ({
+        index,
+        name: t.name,
+        parameters: t.parameters,
+      })))
     }
 
     if (url.pathname === '/state') {
@@ -1632,9 +1651,75 @@ export class SessionAgentDO extends DurableObject {
  * the first version of this probe found out.
  */
 export class PluginHost extends WorkerEntrypoint {
+  /**
+   * Refuse anything the plugin was not granted, and say which grant is missing.
+   *
+   * The permissions travel in `props`, which is per-stub and set by the harness
+   * when it loads the plugin — so a plugin cannot widen its own face, and does
+   * not get a silently empty result when it asks for something it may not have.
+   */
+  require(permission) {
+    const props = this.ctx?.props ?? {}
+    const granted = props.permissions ?? []
+    if (!granted.includes(permission)) {
+      throw new Error(
+        `plugin "${props.pluginId ?? 'unknown'}" was not granted "${permission}". `
+        + `Reinstall it with permissions: ${JSON.stringify([...granted, permission])}`,
+      )
+    }
+    return props
+  }
+
+  /** One filesystem seam call, in the container this session works in. */
+  async fsOp(permission, payload) {
+    const props = this.require(permission)
+    if (!this.env?.EXEC) throw new Error('this deployment has no execution world (no EXEC binding)')
+    const response = await this.env.EXEC.fetch('http://exec/fs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sandboxId: props.sandboxId, cwd: props.cwd, payload }),
+    })
+    const body = await response.json()
+    if (!body?.ok) throw new Error(String(body?.error ?? 'the execution world did not answer'))
+    if (body.result?.error) throw new Error(`${body.result.error.code}: ${body.result.error.message}`)
+    return body.result
+  }
+
   /** Round-trip check that a plugin can call back into the harness at all. */
   async echo(text) {
     return `harness received: ${String(text)} (from plugin ${this.ctx?.props?.pluginId ?? 'unknown'})`
+  }
+
+  /** Everything a plugin may ask of this harness, and nothing else. */
+  async readFile(path) {
+    return (await this.fsOp('fs:read', { op: 'read', path, maxBytes: 1024 * 1024 })).text
+  }
+
+  async listDir(path) {
+    const { entries } = await this.fsOp('fs:read', { op: 'list', path })
+    return entries.map(({ name, path: full, type, size }) => ({ name, path: full, type, size }))
+  }
+
+  async writeFile(path, content) {
+    const result = await this.fsOp('fs:write', { op: 'write', path, content: String(content ?? ''), expected: null })
+    return { operation: result.operation, bytes: String(content ?? '').length }
+  }
+
+  async runCommand(command, options = {}) {
+    const props = this.require('shell')
+    if (!this.env?.EXEC) throw new Error('this deployment has no execution world (no EXEC binding)')
+    const response = await this.env.EXEC.fetch('http://exec/exec', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        sandboxId: props.sandboxId,
+        command: String(command),
+        cwd: options.cwd ?? props.cwd,
+      }),
+    })
+    const body = await response.json()
+    if (!body?.ok) throw new Error(String(body?.error ?? 'the command could not run'))
+    return body.result
   }
 }
 

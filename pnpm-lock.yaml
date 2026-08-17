@@ -62,6 +62,12 @@ importers:
         specifier: 1.0.2-rc.4
         version: 1.0.2-rc.4(@deepseek-ai/cordis@4.0.1-rc.4)
 
+  packages/cf-plugin-host:
+    dependencies:
+      '@deepseek-ai/dsh-tools':
+        specifier: 0.1.0-rc.6
+        version: 0.1.0-rc.6(5be04ca38b7a2e1a8926406395429d52)
+
   packages/cf-session-persistence-do:
     dependencies:
       '@deepseek-ai/dsh-session-persistence':
