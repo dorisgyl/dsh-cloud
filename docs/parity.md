@@ -98,7 +98,9 @@ every provider upstream ships (Exa, Perplexity, DeepSeek search) needs a key the
 self-deployer has to go get.
 
 **`web_search` stays unfilled.** Quick Actions has no search endpoint, and a
-browser is not a search engine.
+browser is not a search engine. Fetch runs on Kitesurf, free while in beta,
+selected over the REST endpoint because the binding cannot reach it —
+`M5-web.md` has the measurements and the one wrong turn they caused.
 
 ## Model providers
 
@@ -278,4 +280,7 @@ load without them.
 - **R2 cold storage** for the session log.
 - **Rate limiting, spend caps, admission control.** A public deployment pays for
   whatever it is asked to do.
-- **`/compact`**, `web_search`, `web_fetch`: registered, never exercised.
+- **`/compact`** and **`web_search`**: registered, never exercised. `web_fetch`
+  now is — the model fetched the Kitesurf documentation through it and answered
+  from the page, including sections and figures that were not in its training
+  data. See `M5-web.md`.

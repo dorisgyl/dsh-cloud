@@ -1,8 +1,10 @@
 # M5 — the web seam
 
 **Date**: 2026-08-17
-**Status**: `web_fetch` works. `web_search` does not, and cannot be made to by
-this route.
+**Status**: `web_fetch` works, end to end — the model fetched Cloudflare's own
+Kitesurf documentation through it and answered from the page, quoting a section
+and a figure (WPT URL coverage, 83%) that appear nowhere in this repo.
+`web_search` does not work, and cannot be made to by this route.
 
 ```
 POST /api/web-probe?url=https://example.com
