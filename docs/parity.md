@@ -202,13 +202,38 @@ And composing the whole tree through it (2026-08-17) is what made the panel
 real: `pluginInventory` went from `{entries: []}` to 70 rows, 69 active. Every
 upstream plugin is a loader entry, so the deployment is inspectable as a plugin
 tree rather than as an opaque set of fibers — and third-party plugins are merged
-into the same list, marked `(third-party, rev …)` with a null phase, because
-they have no fiber and inventing one would be worse than saying so.
+into the same list, marked `(<scope>, rev …)` with a null phase, because they
+have no fiber and inventing one would be worse than saying so.
 
 The honest description of the ceiling, once that is done: **choose from the
 plugins this deployment was built with.** Installing arbitrary third-party code
 is a different problem needing a Dynamic Worker and its own security model, and
 ADR-09's stated reason for skipping it — that no primitive existed — has expired.
+
+## Plugin scope, which upstream does not have to think about
+
+Upstream runs on one machine for one person, so "installed" needs no qualifier.
+Here it does, and the first version got it wrong by omission rather than by
+decision: session objects are named from verified Access claims, so the plugin
+table is per user by construction. A plugin installed with a service token
+registered its tools and ran, while the same deployment's web UI listed
+sixty-eight plugins and not that one.
+
+| | upstream | ours |
+|---|---|---|
+| install for yourself | `~/.dsh/plugins` | `POST /api/plugins` |
+| install for everyone | the same directory — there is only one user | `POST /api/plugins?scope=deployment`, `ADMIN_USERS` only |
+| where it lives | the filesystem | the session object, or `tenant/<t>/plugins` |
+| conflict | there cannot be one | the user's row wins on id |
+
+The shared store is one more Durable Object of the same class under a fixed
+name. No client can address it: every object name a request can produce is built
+by U1 out of claims, and this one is built out of none of them.
+
+Writes to that scope are gated on `ADMIN_USERS`, a **secret** rather than a
+`var` so it survives a deploy. Unset refuses — the alternative default is "any
+signed-in user may install code for every other user of this deployment", which
+is not something a deployment should acquire by omission. See `M4-plugins.md`.
 
 ## Ten seams
 
