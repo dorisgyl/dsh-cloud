@@ -146,7 +146,10 @@ export async function fetchStargazers(repo, { token, fetchImpl = fetch } = {}) {
     const batch = await response.json()
     if (!Array.isArray(batch)) throw new Error(`GitHub returned ${typeof batch} instead of a stargazer array`)
     for (const entry of batch) {
-      if (entry?.login) logins.push(String(entry.login).toLowerCase())
+      // The numeric id is the one that matters; the login is carried for
+      // reading a report. GitHub logins are renameable and Access does not
+      // send one anyway -- see `admits`.
+      if (entry?.id !== undefined) logins.push({ id: Number(entry.id), login: String(entry.login ?? '').toLowerCase() })
     }
     if (batch.length < PER_PAGE) return { logins, truncated }
     if (page === MAX_PAGES) truncated = true
@@ -208,7 +211,7 @@ export class Admission {
   async isStargazer(login, now = Date.now()) {
     if (!login) return { ok: false, reason: 'no GitHub login was resolved for this identity' }
     const state = await this.state(now)
-    const has = state.logins.includes(String(login).toLowerCase())
+    const has = state.logins.some((entry) => entry.login === String(login).toLowerCase())
     return {
       ok: has,
       reason: has ? undefined : `"${login}" has not starred ${this.repo}`,
@@ -225,6 +228,29 @@ export class Admission {
    * Reports WHICH candidate matched, so the answer is auditable and the
    * undocumented field name becomes an observation rather than a prerequisite.
    */
+  /**
+   * Does this identity belong to a stargazer?
+   *
+   * Matched on GitHub's NUMERIC user id, which is what a real Access GitHub
+   * identity turned out to carry:
+   *
+   *   { idp: { type: "github" }, id: 169990062,
+   *     email: "…@hotmail.com", name: "Doris Gan",
+   *     user_uuid: "d7fe7011-…" }
+   *
+   * There is no `login` anywhere in it. The previous design swept every
+   * login-shaped string and would have found nothing usable here -- `doris_gyl`
+   * has an underscore, which GitHub logins forbid; `Doris Gan` has a space;
+   * `169990062` is a number and not a string at all; and the two UUIDs are not
+   * anybody's username. The gate would have refused everyone, correctly
+   * implemented and useless.
+   *
+   * The numeric id is better than the login it replaced, not merely available.
+   * It is exact, so the whole false-positive surface disappears -- no grammar,
+   * no enumerated session values, no `warp` or `us` colliding with a real
+   * account. And GitHub logins are renameable while ids are not, so a user who
+   * renames stays admitted.
+   */
   async admits(identity, now = Date.now()) {
     // Condition one, checked first and on its own. "Signed in with GitHub" and
     // "has starred the repo" are two requirements, and collapsing them into the
@@ -235,16 +261,21 @@ export class Admission {
         reason: `this identity was authenticated by "${identity?.idp?.type ?? 'an unknown provider'}", not GitHub`,
       }
     }
+    const githubId = Number(identity?.id)
+    if (!Number.isInteger(githubId) || githubId <= 0) {
+      return {
+        ok: false,
+        reason: 'this GitHub identity carries no numeric user id',
+        hint: 'Access sends the provider user id as `id`; /api/identity-probe prints the whole identity',
+      }
+    }
     const state = await this.state(now)
-    const candidates = [...candidateLogins(identity)]
-    const matched = candidates.find((candidate) => state.logins.includes(candidate))
+    const matched = state.logins.find((entry) => entry.id === githubId)
     return {
       ok: Boolean(matched),
-      matched,
-      candidatesTried: candidates.length,
-      reason: matched
-        ? undefined
-        : `none of the ${candidates.length} identifiers in this identity has starred ${this.repo}`,
+      githubId,
+      matchedLogin: matched?.login,
+      reason: matched ? undefined : `GitHub user ${githubId} has not starred ${this.repo}`,
       stargazers: state.logins.length,
       truncated: state.truncated,
       refreshedAt: state.refreshedAt,

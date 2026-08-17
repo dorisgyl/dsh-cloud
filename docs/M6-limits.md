@@ -125,6 +125,36 @@ one-time PIN it already had, so an OTP identity reached the star check intact.
 read `"onetimepin"` on a real OTP login, which is how this was found — from a
 live identity, not from reasoning.
 
+### What an Access GitHub identity actually contains
+
+Measured, once GitHub login worked:
+
+```json
+{ "idp": { "type": "github", "id": "9f17d873-…" },
+  "id": 169990062,
+  "email": "doris_gyl@hotmail.com",
+  "name": "Doris Gan",
+  "user_uuid": "d7fe7011-…" }
+```
+
+**There is no GitHub login in it.** `idp.id` is Cloudflare's own identifier for
+the provider configuration, not the user.
+
+That killed the candidate sweep outright, and not by a near miss. On this
+identity it finds nothing usable: `doris_gyl` contains an underscore, which
+GitHub logins forbid; `Doris Gan` contains a space; `169990062` is a **number**,
+so the string walk skips it entirely; and the two UUIDs are nobody's username.
+The gate would have refused every user — correctly implemented and useless.
+
+`id` is GitHub's numeric user id, and the stargazers API returns it on every
+entry. Matching on it is **better than the login it replaced**, not merely
+available: it is exact, so the entire false-positive surface below disappears,
+and GitHub logins are renameable while ids are not, so a user who renames stays
+admitted.
+
+Two rounds of reasoning about string matching were replaced by one field that
+was there all along, and neither round would have ended without looking.
+
 ### The set is not always the safety
 
 `candidateLogins` collects every login-shaped string in an identity, and the
@@ -166,6 +196,9 @@ second can be answered without knowing which key holds the first:
 candidateLogins(identity)      // every login-shaped string, at any depth
   ∩ stargazers                 // the set
 ```
+
+*(Superseded — see the section above. This is kept because the reasoning was
+wrong in a way worth being able to find again.)*
 
 The set is what makes it safe. A false positive needs a stargazer whose login is
 character-for-character some unrelated field of a different person's identity,
