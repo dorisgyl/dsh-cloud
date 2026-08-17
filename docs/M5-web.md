@@ -6,7 +6,7 @@ this route.
 
 ```
 POST /api/web-probe?url=https://example.com
-  default (binding)   291ms wall / 136 billed browser-ms
+  live: { configured: "kitesurf", lastUsed: "rest-kitesurf" }
   "---\ntitle: \"Example Domain\"\n---\n\n# Example Domain\n\n..."
 ```
 
@@ -46,12 +46,13 @@ the object's CPU converting it. This deployment already needs the paid plan for
 CPU reasons. `/markdown` lands in the `text` arm, which is accurate rather than
 convenient: markdown is text.
 
-## Kitesurf: measured, and not adopted
+## Kitesurf: adopted, over one wrong turn
 
 Kitesurf is Browser Run's agent-first browser, documented at 3–7× less CPU and
 memory than Chromium and 1.7–1.8× slower, free while in beta. Its weaknesses
 (video, WebGL, bot-challenge TLS, persistent logins) are all things this seam
-does not need. It looked like an obvious win.
+does not need — `fetch(url)` is one-shot by contract, and the request type
+carries no auth, no cookies and no session.
 
 **The binding cannot select it.** `?browser=kitesurf` is a query parameter, and
 the binding has no query string. All three placements it does have were swept:
@@ -67,20 +68,21 @@ is the reason this package is named `cf-web-browser-run` rather than
 `cf-web-kitesurf`: the body is validated and the options bag is not, so the one
 placement that looked like it worked is the one that silently did not. No
 response header names the engine, so billed milliseconds are the only evidence
-there is — and against controls of 268ms and 311ms, asking for Kitesurf billed
-365ms. Above both, when the documented difference is far below.
+there is — and against controls of 268ms and 311ms, asking for Kitesurf metered
+365ms. Above both, where a browser that had actually changed should have moved
+the number.
 
 A deployment believing it ran Kitesurf while paying for Chromium would have had
 no symptom at all.
 
 ### Over REST, where it does work
 
-| transport | billed browser-ms | wall |
+| transport | metered browser-ms | wall |
 |---|---|---|
 | kitesurf (REST) | 876, 899 | 1612, 1024ms |
 | default (binding) | 136, 489, 297 | 291, 611, 468ms |
 
-The first REST call billed 2140ms and is excluded: it was a cold browser
+The first REST call metered 2140ms and is excluded: it was a cold browser
 session, and the row that runs first pays for it. That correction mattered —
 2140 against 136 is 14×, and the warm number is 2.9×.
 
