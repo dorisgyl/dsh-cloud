@@ -69,8 +69,13 @@ export function apply(ctx, config) {
   if (typeof config?.foreignEntries === 'function') {
     const own = loader.entries.bind(loader)
     loader.entries = function* entries() {
-      yield* own()
+      // Third-party first. The panel renders in this order and does not sort,
+      // so yielding them last buried the one plugin someone just installed
+      // under seventy they did not choose. The list answers "what is in this
+      // deployment"; the part the operator added is the part they are looking
+      // for.
       yield* config.foreignEntries()
+      yield* own()
     }
   }
 
