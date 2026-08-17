@@ -31,9 +31,10 @@ port: no fork, no patched copies, no reimplemented agent loop.
 | Session model and event log vocabulary | same | `dsh-session` |
 | Tool registry, schemas, execution modes | same | `dsh-tools` |
 | System prompt assembly | same | `dsh-agent-instructions` |
-| Context compaction | same | `dsh-compaction` — **untested** |
+| Context compaction | same | `dsh-compaction-basic`; the ENGINE was missing until 2026-08-17 — still untested |
 | Subagents | same | `dsh-subagent` + spawn provider, depth limit 2 |
-| Goals, todos, skills | same | `dsh-goal`, `dsh-tool-todo`, `dsh-skill` |
+| Goals, todos, skills | same | `dsh-goal`, `dsh-tool-todo`, `dsh-skill`; `todo_write` was absent until 2026-08-17 |
+| Plan mode | same | `exit_plan_mode`; absent until 2026-08-17 |
 | Approvals and user questions | same | verified through `POST /api/respond` |
 | Jobs / background work | same | `dsh-jobs-local` — "local" is in-process |
 | Session projections, titles, telemetry | same | OTel exporter excluded (336 KB, no benefit) |
@@ -109,7 +110,7 @@ injects the graph as `window.__DSH_BOOT__`.
 | Event downlinks | ours | WebSockets for the browser, SSE for non-browser clients — upstream ships both client platforms over the same paths |
 | Web server / static file host | ours | Workers Static Assets; `node:http` has no equivalent |
 | Directory picker | ours | `cf-workspace-picker` serves the `browse` capability over the container; `native` needs a desktop |
-| Plugin management panel | partial | the `loader` service and `pluginInventory` are live and served; the list is empty until the tree is composed THROUGH the loader |
+| Plugin management panel | same | read-only, and now real: 70 loader entries, 69 active |
 | **Third-party plugins** | **ours** | installed into a running deployment, running in isolates with no network; upstream's authoring model, a narrower `ctx` (`M4-plugins.md`) |
 | Agent presets | no | `dsh-agent-presets` needs the file loader; `session.create` refuses a preset rather than ignoring it |
 | Attachments | ours | `cf-attachments-do` stores images beside the log — **never executed**, because the bound model takes no images |
@@ -133,6 +134,45 @@ turn, slash commands, `/export`, `ask_user_question`, subagents.
 | Per-user isolation | ours | one Durable Object and one container per Access user, named from verified claims |
 | R2 cold storage for old events | no | ADR-06 plans it; only the hot tier exists |
 | Tenant-level settings object | no | design's U3 is not built |
+
+## Six features that were never running
+
+Composing the plugin tree through the loader (2026-08-17) turned a report of
+perfect health into seven failed entries. Direct `ctx.plugin()` registration had
+been answering `failed: []`, `pending: []`, `unmet: []` the whole time.
+
+Reading the reasons needed one more thing: Cordis routes a plugin failure to
+`ctx.logger.error` and keeps no field for it, so a log sink has to be installed
+on the bare context *before anything loads*. On a Worker there is no console to
+scroll, so an unread reason is a lost one.
+
+Six of the seven wanted required config that nothing supplied, and therefore did
+nothing at all:
+
+| plugin | what was missing from this deployment |
+|---|---|
+| `dsh-tool-todo` | the `todo_write` tool |
+| `dsh-plan-mode` | plan mode and `exit_plan_mode` |
+| `dsh-compaction-basic` | the compaction **engine** — only the seam was registered, an eleventh abstract-seam collision |
+| `dsh-session-projection-cache` | the cold-read cache |
+| `dsh-message-feedback` | feedback notes |
+| `dsh-session-title-first-prompt-llm` | model-written session titles (the fallback truncation was doing all the work) |
+
+Upstream ships these with no defaults deliberately — the values are policy, and
+a library that guesses policy is worse than one that refuses to start. The
+refusal only helps if someone hears it.
+
+Two stay excluded, each for a reason worth keeping:
+
+- **`dsh-agent-tool-presentation`** needs an agent-scoped context (`tools.presentAs()`
+  refuses a root one) and belongs with presets.
+- **`dsh-permission-presets`** needs a bash executor that confines, and
+  `cf-exec-provider` reports no `sandboxMode` precisely because the container is
+  the boundary and nothing narrower is enforced inside it. Claiming a mode to
+  satisfy this plugin would be the dishonest fix.
+
+47 services, 22 tools, and a boot with nothing in `failed`, `entryErrors` or the
+log sink.
 
 ## Runtime composition, and what is still missing from it
 
@@ -158,10 +198,12 @@ module map makes every plugin row resolve from what is already compiled in —
 What that buys today: `loader` is live, `dsh-host-plugin-inventory` loads, and
 `pluginInventory/list` answers instead of 404.
 
-What it does not buy yet: **the answer is `{entries: []}`**. `loader.entries()`
-yields rows the LOADER created, and `cf-boot` still assembles the tree with
-direct `ctx.plugin()` calls that bypass it. Making the panel show anything means
-composing through the loader — a change to `assemble()`, not to the loader.
+And composing the whole tree through it (2026-08-17) is what made the panel
+real: `pluginInventory` went from `{entries: []}` to 70 rows, 69 active. Every
+upstream plugin is a loader entry, so the deployment is inspectable as a plugin
+tree rather than as an opaque set of fibers — and third-party plugins are merged
+into the same list, marked `(third-party, rev …)` with a null phase, because
+they have no fiber and inventing one would be worse than saying so.
 
 The honest description of the ceiling, once that is done: **choose from the
 plugins this deployment was built with.** Installing arbitrary third-party code
