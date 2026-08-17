@@ -30,6 +30,16 @@
   // 2026-08-01.
   "browser": { "binding": "BROWSER" },
 
+  // Optional, and the deployment is complete without them: they switch the web
+  // fetch seam from the binding's default browser (billed by the millisecond)
+  // to Kitesurf over REST (free while in beta). Secrets rather than vars, so
+  // they survive a deploy and stay out of this repo:
+  //
+  //   npx wrangler secret put CF_ACCOUNT_ID
+  //   npx wrangler secret put BROWSER_RUN_TOKEN     # Browser Rendering: Edit
+  //
+  // Absent, cf-web-browser-run uses the binding and says so in /web-probe.
+
   "worker_loaders": [{ "binding": "LOADER" }],
 
   "durable_objects": {

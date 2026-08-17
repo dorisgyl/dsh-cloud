@@ -539,7 +539,17 @@ export class SessionAgentDO extends DurableObject {
     // no provider, and `web_fetch` fails the way it already did.
     if (this.env?.BROWSER) {
       try {
-        this.webFetch = new BrowserRunFetchProvider({ browser: this.env.BROWSER })
+        this.webFetch = new BrowserRunFetchProvider({
+          browser: this.env.BROWSER,
+          // Three things, and all three are needed to leave the default: the
+          // choice, plus the two credentials it needs. WEB_TRANSPORT is the
+          // choice, and it is separate on purpose -- measured, Kitesurf is
+          // ~2.5x slower per fetch, so making a credential imply it would slow
+          // every model fetch down as a side effect of configuration.
+          transport: this.env.WEB_TRANSPORT,
+          accountId: this.env.CF_ACCOUNT_ID,
+          token: this.env.BROWSER_RUN_TOKEN,
+        })
         ctx.web.registerFetchProvider(this.webFetch)
       } catch (error) {
         this.lateErrors.push({ specifier: 'cf-web-browser-run', error: String(error?.message ?? error) })
@@ -785,8 +795,14 @@ export class SessionAgentDO extends DurableObject {
       // 6ms with `browserMs` identical to eleven decimal places -- Quick
       // Actions had cached by URL and the control row was a replay of the
       // first. Two engines do not agree to the picosecond; a cache does.
-      const attempt = async (selection, tag) => {
-        const provider = new BrowserRunFetchProvider({ browser: this.env.BROWSER, selection })
+      const attempt = async (selection, tag, rest = false) => {
+        const provider = new BrowserRunFetchProvider({
+          browser: this.env.BROWSER,
+          selection,
+          ...(rest
+            ? { transport: 'kitesurf', accountId: this.env.CF_ACCOUNT_ID, token: this.env.BROWSER_RUN_TOKEN }
+            : {}),
+        })
         const bust = new URL(target)
         bust.searchParams.set('__dsh_probe', tag)
         const t0 = Date.now()
@@ -799,6 +815,8 @@ export class SessionAgentDO extends DurableObject {
             browserMs: provider.browserMs,
             statusCode: result.statusCode,
             bytes: result.body.content.length,
+            transport: provider.lastTransport,
+            fellBackBecause: provider.restFallbackReason,
             headers: provider.lastHeaders,
             head: result.body.content.slice(0, 160),
           }
@@ -812,8 +830,27 @@ export class SessionAgentDO extends DurableObject {
       // is silently ignored will be indistinguishable from the control.
       return Response.json({
         target,
+        // What a real web_fetch uses right now, as opposed to what the rows
+        // below can be made to do on request.
+        live: {
+          configured: this.env.WEB_TRANSPORT ?? 'binding (default)',
+          lastUsed: this.webFetch?.lastTransport ?? 'not used yet this instance',
+        },
         attempts: {
-          options: await attempt(SELECTION.options, 'options'),
+          // The row that matters now: REST with a token, which is the only
+          // road to Kitesurf. `transport` says which one actually ran, so a
+          // fallback cannot be mistaken for a success.
+          // Twice, on separate URLs. The first sweep put the only REST row
+          // first and read 2140 billed ms against a binding control of 135 --
+          // 14x the wrong way from the documented 3-7x. A cold browser session
+          // and a warm pool are not the same measurement, and the row that
+          // runs first pays for the difference.
+          restKitesurf: this.env.BROWSER_RUN_TOKEN
+            ? await attempt(null, 'rest1', true)
+            : { skipped: 'BROWSER_RUN_TOKEN is not set' },
+          restKitesurfAgain: this.env.BROWSER_RUN_TOKEN
+            ? await attempt(null, 'rest2', true)
+            : { skipped: 'BROWSER_RUN_TOKEN is not set' },
           body: await attempt(SELECTION.body, 'body'),
           action: await attempt(SELECTION.action, 'action'),
           default: await attempt(null, 'default'),
@@ -821,6 +858,10 @@ export class SessionAgentDO extends DurableObject {
           // with each other set the noise floor, without which "options is
           // 30% cheaper" means nothing.
           defaultAgain: await attempt(null, 'default2'),
+          // Last, so the binding also gets a row that is not first in line.
+          // Without it, "the binding is faster" could just be "whatever runs
+          // third is faster".
+          defaultLast: await attempt(null, 'default3'),
         },
         note: 'Each row fetches its own URL: Quick Actions caches by URL, and the first sweep '
           + 'compared a live call against a replay of itself. Read `options` against BOTH default '

@@ -55,12 +55,36 @@
 // the one that silently did not. A deployment believing it ran Kitesurf while
 // paying for Chromium would have had no symptom at all.
 //
-// So this provider asks for nothing and gets Browser Run's default browser.
+// So the binding asks for nothing and gets Browser Run's default browser.
 // `SELECTION` keeps the candidates alive so the sweep can be re-run when
-// Cloudflare documents a binding-level selector; today the honest default is
-// `null`. Getting Kitesurf means the REST API and an API token, which costs
-// this deployment its zero-configuration property (ADR-12) -- a trade nobody
-// should make silently on a self-deployer's behalf.
+// Cloudflare documents a binding-level selector.
+//
+// The REST endpoint DOES have `?browser=kitesurf`, at the price of an API
+// token, so this provider has two transports:
+//
+//   binding   zero configuration, default browser        DEFAULT
+//   rest      one API token, Kitesurf, free during beta  opt in
+//
+// Measured on example.com, warm (the first REST call was a 2140ms cold start
+// and is excluded):
+//
+//   kitesurf (rest)     876, 899 billed ms      1612, 1024ms wall
+//   default (binding)   136, 489, 297           291, 611, 468ms wall
+//
+// Kitesurf meters ~2.9x MORE, not the 3-7x less the docs advertise -- and the
+// docs are not wrong, the mapping was. "3-7x less CPU and memory" is a
+// resource claim; the meter is TIME. A browser that uses less CPU and takes
+// longer bills more of it. The other half of the claim, 1.7-1.8x slower, shows
+// up as ~2.5x and is roughly right.
+//
+// Whether those metered milliseconds are actually charged during the beta is
+// NOT visible here: `x-browser-ms-used` is reported identically either way, so
+// only a bill can answer it. That uncertainty is exactly why the faster,
+// zero-configuration road stays the default and Kitesurf is opted into.
+//
+// A REST failure falls back to the binding rather than failing the fetch, and
+// says so in `lastTransport` -- a silent fallback would recreate the bug this
+// file was renamed for: believing one engine ran while another did.
 import { WebError } from '@deepseek-ai/dsh-web'
 
 /**
@@ -137,6 +161,16 @@ export class BrowserRunFetchProvider {
     // and sending a field that does nothing would leave a false claim in every
     // request forever.
     this.selection = config.selection ?? null
+    // Credentials are necessary but NOT sufficient. Having a token must not be
+    // the same as choosing to use it: on the numbers above, that would make
+    // every model fetch 2.5x slower as a side effect of configuring a
+    // credential, which is not a decision anyone would have made on purpose.
+    this.rest = config.transport === 'kitesurf' && config.accountId && config.token
+      ? { accountId: config.accountId, token: config.token }
+      : null
+    // Which road the last call actually took. Not inferred from configuration:
+    // `rest` being set says what was ATTEMPTED, and this says what happened.
+    this.lastTransport = null
     // Browser-milliseconds, reported by the platform on every response. Kept so
     // the cost of this capability is a measurement rather than an estimate.
     this.browserMs = 0
@@ -162,13 +196,7 @@ export class BrowserRunFetchProvider {
 
     let response
     try {
-      const action = this.selection === SELECTION.action ? `${ACTION}?browser=kitesurf` : ACTION
-      const body = { url, ...(this.selection === SELECTION.body ? { browser: 'kitesurf' } : {}) }
-      const options = this.selection === SELECTION.options ? { browser: 'kitesurf' } : undefined
-      response = await this.withDeadline(
-        options ? this.browser.quickAction(action, body, options) : this.browser.quickAction(action, body),
-        signal,
-      )
+      response = await this.send(url, signal)
     } catch (error) {
       if (error instanceof WebError) throw error
       if (signal?.aborted) throw new WebError('the caller cancelled this fetch', 'WEB_CANCELLED', { cause: error })
@@ -198,6 +226,59 @@ export class BrowserRunFetchProvider {
       body: { kind: 'text', content: truncated ? content.slice(0, this.maxBodyBytes) : content },
       truncated,
     }
+  }
+
+  /**
+   * REST when a token is configured, the binding otherwise.
+   *
+   * The fallback is deliberate and deliberately loud. Kitesurf is in beta with
+   * per-account limits, so "the free browser refused" is an ordinary Tuesday,
+   * and failing a model's fetch over it would be worse than answering from
+   * Chromium. What must not happen is answering from Chromium while reporting
+   * Kitesurf, so the reason is kept rather than swallowed.
+   */
+  async send(url, signal) {
+    if (this.rest) {
+      try {
+        const response = await this.withDeadline(this.viaRest(url), signal)
+        if (response.ok) {
+          this.lastTransport = 'rest-kitesurf'
+          return response
+        }
+        // A non-2xx from the API is Browser Run refusing, not the page being
+        // unavailable -- the page's own status arrives inside the JSON.
+        this.restFallbackReason = `Kitesurf answered ${response.status}: ${(await response.text()).slice(0, 200)}`
+      } catch (error) {
+        if (error instanceof WebError && error.code === 'WEB_CANCELLED') throw error
+        this.restFallbackReason = String(error?.message ?? error).slice(0, 200)
+      }
+    }
+    const action = this.selection === SELECTION.action ? `${ACTION}?browser=kitesurf` : ACTION
+    const body = { url, ...(this.selection === SELECTION.body ? { browser: 'kitesurf' } : {}) }
+    const options = this.selection === SELECTION.options ? { browser: 'kitesurf' } : undefined
+    const response = await this.withDeadline(
+      options ? this.browser.quickAction(action, body, options) : this.browser.quickAction(action, body),
+      signal,
+    )
+    this.lastTransport = this.rest ? 'binding-default (Kitesurf fell back)' : 'binding-default'
+    return response
+  }
+
+  /**
+   * The one road that can actually reach Kitesurf. `?browser=kitesurf` is a
+   * query parameter, which is exactly what the binding does not have.
+   */
+  viaRest(url) {
+    const endpoint = `https://api.cloudflare.com/client/v4/accounts/${this.rest.accountId}`
+      + `/browser-rendering/${ACTION}?browser=kitesurf`
+    return fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${this.rest.token}`,
+      },
+      body: JSON.stringify({ url }),
+    })
   }
 
   /**
