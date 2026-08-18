@@ -27,7 +27,7 @@ https://github.com/user-attachments/assets/2fb87efd-3530-4392-94ae-f9161183ea47
 
 *36 seconds: the agent writes `primes.js`, runs it with `node`, and shows the
 output — the model, the filesystem and the shell in one turn, on a live
-deployment. Click to play.*
+deployment.*
 
 ## Try the demo
 
