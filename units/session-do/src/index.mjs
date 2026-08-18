@@ -581,7 +581,25 @@ export class SessionAgentDO extends DurableObject {
     // counted the same way whichever path reaches it -- the queue, the web UI,
     // or a subagent.
     const metered = (adapter) => withMetering(withCoalescing(adapter, this.coalescing), {
-      check: () => this.ledger('/check', { meter: 'modelTurns', amount: 1 }),
+      // An unreachable ledger REFUSES the turn.
+      //
+      // The first version treated `null` as "no verdict, carry on", so a
+      // metering outage became free model calls -- exactly inverted from what
+      // this deployment wants, and silent while it happened. A refusal here is
+      // visible, bounded by however long the ledger is away, and cheap to
+      // retry; the alternative is unmetered spend nobody can see afterwards.
+      check: async () => {
+        const verdict = await this.ledger('/check', { meter: 'modelTurns', amount: 1 })
+        if (verdict?.skipped) return { ok: true }
+        if (verdict === null) {
+          return {
+            ok: false,
+            message: 'the usage ledger could not be reached, so this turn cannot be metered',
+            resetsAt: new Date(Date.now() + 60_000).toISOString(),
+          }
+        }
+        return verdict
+      },
       record: ({ turns }) => {
         this.meter({ modelTurns: turns })
         // Not awaited: this runs in a stream's `finally`, and blocking there
@@ -921,6 +939,34 @@ export class SessionAgentDO extends DurableObject {
     // BACK into us? Both halves matter: the first decides whether third-party
     // plugins are possible, the second decides whether they can be written as
     // ordinary Cordis plugins instead of as a second plugin model.
+    // The cached list itself, with an explicit refresh.
+    //
+    // `?refresh=1` drops the TTL to zero for one call, because the alternative
+    // when somebody stars the repo and is still refused is to wait out a cache
+    // and hope -- which cannot distinguish a stale list from a broken match.
+    if (url.pathname === '/admission-state') {
+      const admission = new Admission({
+        sql: this.sql,
+        repo: this.env?.GITHUB_REPO || 'dorisgyl/dsh-cloud',
+        token: this.env?.GITHUB_TOKEN || undefined,
+        ttlMs: url.searchParams.get('refresh') === '1' ? 0 : (Number(this.env?.ADMISSION_TTL_MS) || 60_000),
+      })
+      const state = await admission.state(Date.now())
+      return Response.json({
+        repo: this.env?.GITHUB_REPO || 'dorisgyl/dsh-cloud',
+        refreshed: url.searchParams.get('refresh') === '1',
+        refreshedAt: state.refreshedAt ? new Date(state.refreshedAt).toISOString() : null,
+        count: state.logins.length,
+        // ids and logins, which is what the match runs on. Public data.
+        stargazers: state.logins,
+        truncated: state.truncated,
+        error: state.error ?? null,
+        token: this.env?.GITHUB_TOKEN === undefined
+          ? 'not set'
+          : (this.env.GITHUB_TOKEN.length === 0 ? 'SET BUT EMPTY' : `set (${this.env.GITHUB_TOKEN.length} chars)`),
+      })
+    }
+
     // The stargazer list, for the tenant object that holds it.
     //
     // Same shape as /plugin-store and /budget: SQLite only, no tree. It is on
@@ -941,7 +987,7 @@ export class SessionAgentDO extends DurableObject {
         // secret put` creates the binding whether or not the paste landed --
         // and the two states produced identical behaviour until this line.
         token: this.env?.GITHUB_TOKEN || undefined,
-        ttlMs: Number(this.env?.ADMISSION_TTL_MS) || 5 * 60_000,
+        ttlMs: Number(this.env?.ADMISSION_TTL_MS) || 60_000,
       })
       // `admits` when the caller sends a whole identity, `isStargazer` when it
       // already knows a login. The edge sends the identity, because which field
@@ -2158,17 +2204,25 @@ export class SessionAgentDO extends DurableObject {
   /**
    * Ask the user's ledger a question, or tell it something.
    *
-   * Failures are ADMITTED, not refused. A ledger that cannot be reached is an
-   * outage of the accounting, and refusing every request during one would turn
-   * a metering bug into a total outage. The cost of the other choice is
-   * bounded: it lasts as long as the ledger is unreachable, and it is recorded.
+   * Returns `null` when it cannot be reached, and what that means is decided by
+   * the caller rather than here -- the two callers want opposite things.
+   *
+   * `/spend` is bookkeeping after the fact: a failed report is re-queued and
+   * costs a little under-billing. `/check` guards a model turn, and an
+   * unreachable ledger there means the spend cannot be counted, so the turn
+   * must not run. That is the deployment owner's stated order: rather refuse
+   * than let anything burn money unmetered.
    */
   async ledger(path, body) {
-    if (this.isBudgetObject) return null
+    // Not a failure: this object IS the ledger, so there is nobody to ask.
+    // Distinguished from an unreachable ledger because the callers now treat
+    // those differently -- one is "no accounting needed", the other is "the
+    // accounting is down, refuse".
+    if (this.isBudgetObject) return { skipped: 'this object is the ledger' }
     try {
       const name = budgetObjectName(this.tenant, this.userId ?? 'unknown')
       const id = this.env.SESSION.idFromName(name)
-      if (id.toString() === this.state.id.toString()) return null
+      if (id.toString() === this.state.id.toString()) return { skipped: 'this object is the ledger' }
       const response = await this.env.SESSION.get(id).fetch(`http://session/budget${path}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-dsh-tenant': this.tenant },

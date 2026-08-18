@@ -169,7 +169,24 @@ export async function fetchStargazers(repo, { token, fetchImpl = fetch } = {}) {
 }
 
 export class Admission {
-  constructor({ sql, repo, token, ttlMs = 5 * 60_000, fetchImpl }) {
+  /**
+   * `ttlMs` is how long a revoked star keeps working, and that is the number
+   * it should be chosen by.
+   *
+   * It began at five minutes, chosen for the unauthenticated GitHub budget of
+   * 60 requests an hour. With a token the budget is 5000, so the constraint
+   * that set it no longer exists -- and five minutes on the wrong side of a
+   * gate whose owner would rather refuse than admit is simply the wrong
+   * default. Sixty seconds costs at most 60 calls an hour, per TENANT rather
+   * than per user, because one object holds the list however many people ask.
+   *
+   * It cannot be zero. Every admitted request would then fetch the list, and
+   * the /api branch admits on every call the UI makes -- that is a GitHub
+   * request per RPC, which exhausts even the authenticated budget and puts a
+   * round trip to github.com in front of every interaction. A window that
+   * closes in a minute is the cheap end of a real trade, not an oversight.
+   */
+  constructor({ sql, repo, token, ttlMs = 60_000, fetchImpl }) {
     if (!sql) throw new Error('cf-admission requires the Durable Object SQLite handle')
     this.sql = sql
     this.sql.exec(SCHEMA)

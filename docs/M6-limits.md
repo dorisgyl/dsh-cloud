@@ -74,8 +74,28 @@ puts the amount back. An isolate that dies mid-window under-bills rather than
 over-bills — the right direction for a meter whose failure mode is refusing a
 paying user.
 
-**An unreachable ledger admits.** A metering outage that refused every request
-would turn an accounting fault into a total outage, which is the worse failure.
+### An unreachable ledger: refuse the spend, admit the request
+
+The first version admitted on any ledger failure, reasoning that an accounting
+fault should not become a total outage. That reasoning traded away the thing
+this deployment cares about most: its owner's order is **rather refuse than let
+anything burn money unmetered**, and a metering outage was quietly the cheapest
+possible way to get free model calls.
+
+Split by what the failure actually costs:
+
+| meter | on an unreachable ledger | why |
+|---|---|---|
+| `modelTurns` | **refuse the turn** | the spend is real and would be uncounted |
+| `requests` | admit | a missed rate-limit slot costs nothing directly, and the window self-heals in 60s |
+| `/spend` reports | re-queue locally | bookkeeping after the fact; the amount is not lost |
+
+The refusal is visible, lasts only as long as the ledger is away, and is cheap
+to retry. The alternative was unmetered spend that nobody could see afterwards.
+
+"This object IS the ledger" and "the ledger is unreachable" both used to return
+`null` and would now have collapsed into the same refusal; they are separate
+values because only one of them is a fault.
 
 ## Admission: a GitHub login that has starred the repo
 

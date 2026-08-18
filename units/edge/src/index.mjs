@@ -99,6 +99,37 @@ async function admit(request, env, claims) {
   }
 }
 
+/** The SPA document, which is the only static path worth an identity lookup. */
+function isDocumentPath(pathname) {
+  return pathname === '/' || pathname === '/index.html'
+}
+
+/**
+ * A page, not a JSON body: whoever sees this typed a URL into a browser.
+ *
+ * It names the repo and the reason, because the whole point of this gate is
+ * that it is passable -- somebody refused here should be able to tell what to
+ * do about it without reading a status code.
+ */
+function refusalPage(verdict, env) {
+  const repo = env.GITHUB_REPO || 'dorisgyl/dsh-cloud'
+  const escape = (text) => String(text ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
+  return new Response(
+    `<!doctype html><meta charset="utf-8"><title>Not admitted</title>
+<style>body{font:16px/1.6 system-ui,sans-serif;max-width:34rem;margin:12vh auto;padding:0 1.5rem;color:#222}
+code{background:#f4f4f5;padding:.15em .4em;border-radius:.25em}a{color:#0b6}</style>
+<h1>Not admitted</h1>
+<p>${escape(verdict.reason ?? 'this account cannot use this deployment')}</p>
+<p style="color:#666;font-size:.9em">The list currently holds
+${Number(verdict.stargazers ?? 0)} stargazer(s)${verdict.refreshedAt ? `, last read ${escape(new Date(verdict.refreshedAt).toISOString())}` : ' and has never loaded'}.
+A star given just now takes up to a minute to appear here.</p>
+<p>This deployment is open to people who have starred
+<a href="https://github.com/${escape(repo)}">${escape(repo)}</a>. Star it and reload;
+the list refreshes every few minutes.</p>`,
+    { status: 403, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } },
+  )
+}
+
 const NOT_PROTECTED = {
   error: 'access-not-configured',
   hint: 'Set ACCESS_TEAM_DOMAIN and ACCESS_AUD from a hostname-based Cloudflare '
@@ -140,6 +171,26 @@ function withBootManifest(response) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url)
+
+    // The gate, before the document.
+    //
+    // It used to live inside the /api branch below, which meant the entire UI
+    // loaded for anyone Access authenticated: the app appeared, navigated, and
+    // failed only when it called an API. Nothing chargeable is behind a static
+    // file, so the bill was safe and the door was not -- and a door that looks
+    // open is a wrong answer regardless of what it protects.
+    //
+    // Checked for the DOCUMENT and for /api, not for the other 120 static
+    // files. Each check costs a `get-identity` round trip, and a stylesheet
+    // fetched by a page that was already refused buys nothing.
+    if (env.ADMISSION_REQUIRE_STAR === '1' && isDocumentPath(url.pathname) && isConfigured(env)) {
+      const claims = await identify(request, env)
+      if (!claims) return new Response('unauthorized', { status: 401 })
+      if (claims.kind === 'user') {
+        const verdict = await admit(request, env, claims)
+        if (!verdict.ok) return refusalPage(verdict, env)
+      }
+    }
 
     // Everything outside /api is the UI. Assets are public: Access, when
     // configured, has already gated the whole hostname in front of the Worker.
@@ -288,11 +339,35 @@ export default {
     // its code, not its guest list -- their repo is not dorisgyl/dsh-cloud, and
     // a gate that checks somebody else's stargazers is an absurd default for an
     // open-source project.
-    if (env.ADMISSION_REQUIRE_STAR === '1' && claims.kind === 'user') {
+    // Exempt: the routes that explain the refusal.
+    //
+    // A gate that also hides its own diagnostics locks out the person best
+    // placed to fix it, and does so precisely when something is wrong. These
+    // read; they spend nothing; and the stargazer list they expose is public
+    // data on github.com. Being refused must not mean being unable to find out
+    // why.
+    const DIAGNOSTIC = ['/admission-check', '/admission-state', '/version', '/whoami', '/identity-probe']
+      .map((p) => `${API_PREFIX}${p}`)
+    if (env.ADMISSION_REQUIRE_STAR === '1' && claims.kind === 'user' && !DIAGNOSTIC.includes(url.pathname)) {
       const verdict = await admit(request, env, claims)
       if (!verdict.ok) {
         return Response.json({ error: 'not-admitted', ...verdict }, { status: 403 })
       }
+    }
+
+    // The cached stargazer list itself, and a way to refresh it now.
+    //
+    // The list has a TTL, so a star given a minute ago is not in it yet, and
+    // "I starred it and still cannot get in" has two very different causes --
+    // a stale cache and a failed match -- that look identical from a refusal.
+    if (url.pathname === `${API_PREFIX}/admission-state`) {
+      const admission = env.SESSION.get(env.SESSION.idFromName(`tenant/${claims.tenant}/admission`))
+      const response = await admission.fetch('http://session/admission-state' + url.search, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-dsh-tenant': claims.tenant },
+        body: '{}',
+      })
+      return new Response(response.body, { status: response.status, headers: { 'content-type': 'application/json' } })
     }
 
     // The cheap meter, checked before anything expensive is reached.
