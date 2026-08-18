@@ -9,16 +9,19 @@ Serverless, hibernates when idle, and **keeps working after you close the tab**.
 Deploy it to **your own** Cloudflare account. You bring the account and the model
 key; nothing here asks you to sign up for anything of ours.
 
-<!-- Inline playback on github.com needs a `github.com/user-attachments/assets/…`
-     URL, which only exists for files uploaded through GitHub's own web UI
-     (drag the file into an issue draft and copy the URL it produces). A bare
-     one of those, alone on a line, becomes a player. A `raw` link to a file in
-     the repository does not: raw.githubusercontent serves mp4 with a
-     content-type the renderer will not treat as video.
+<!-- Two references to one video, deliberately.
 
-     Until then this is a poster that links to the file. It renders everywhere,
-     including in clones and on other Git hosts, which the attachment URL does
-     not. Keep media/demo.mp4 committed either way. -->
+     The bare URL below is a GitHub attachment, and only that shape becomes an
+     inline player: it exists because the file was uploaded through GitHub's web
+     UI. A `raw` link to the committed copy will not play -- raw.githubusercontent
+     serves mp4 with a content-type the renderer does not treat as video.
+
+     The attachment renders only on github.com, and it lives on GitHub's CDN
+     rather than in this repository, so it survives a rename and cannot be
+     removed by a commit. The poster underneath is the copy that works in a
+     clone, on another host, and offline. Keep media/demo.mp4 committed. -->
+
+https://github.com/user-attachments/assets/2fb87efd-3530-4392-94ae-f9161183ea47
 
 [![dsh-cloud demo](media/demo-poster.png)](https://github.com/dorisgyl/dsh-cloud/raw/main/media/demo.mp4)
 
