@@ -869,7 +869,11 @@ export class SessionAgentDO extends DurableObject {
     }
     const events = size('session_event', 'LENGTH(event)')
     const headers = size('session_header', 'LENGTH(meta)')
-    const attachments = size('attachment', 'LENGTH(bytes)')
+    // LENGTH(data), not LENGTH(bytes). `bytes` is an INTEGER column holding the
+    // declared size, so LENGTH() of it counts DIGITS -- a 2 MB image reported
+    // as 7. The blob is `data`, and this is the one number in the report that
+    // could be wrong without anything failing.
+    const attachments = size('attachment', 'LENGTH(data)')
     return {
       bytes: events + headers + attachments,
       byTable: { session_event: events, session_header: headers, attachment: attachments },
