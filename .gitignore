@@ -22,10 +22,11 @@ target
 
 CLAUDE.md
 .claude
-docs/plans/
-docs/superpowers/
-docs/testing/
-docs/adr/
+# docs/ is a working notebook: measurements, dead ends, and the reasoning
+# behind decisions, written for whoever maintains this deployment. Only the
+# comparison against upstream is meant for readers of the repository.
+docs/*
+!docs/parity.md
 CONTEXT.md
 *.plan
 *_plan.md

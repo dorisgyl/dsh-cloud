@@ -24,14 +24,13 @@ What runs today, verified against a real deployment:
 | A real model | yes — Workers AI, no API key |
 | Shell — real commands in a Cloudflare container | yes |
 | Files — read / write / edit, same execution world as the shell | yes |
-| Terminal — a real PTY, state kept across turns | yes, but not the default `bash` (see `docs/M2-terminal.md`) |
+| Terminal — a real PTY, state kept across turns | yes, but the default `bash` tool stays one-shot |
 | The dsh web UI | yes — served, and its protocol works end to end |
-| Third-party plugins, installed without a redeploy | yes — isolated, no network of their own (`docs/M4-plugins.md`) |
+| Third-party plugins, installed without a redeploy | yes — isolated, no network of their own (`packages/cf-plugin-hostins.md`) |
 | Workspace files surviving container recycling | **no** — see Limitations |
 
-See `docs/M0-findings.md`, `docs/M1-*.md`, `docs/M2-*.md` and `docs/M3-web-ui.md`
-for what each step measured and what it overturned. Several of those documents
-correct an earlier conclusion of their own; that is deliberate.
+See `docs/parity.md` for a feature-by-feature comparison against the upstream
+harness, including what is deliberately absent and why.
 
 ## Limitations
 
@@ -214,7 +213,7 @@ Browser Run's default browser, billed by browser-time.
 | `LIMIT_BROWSER_MS_PER_DAY` | 300000 |
 | `SESSION_RETENTION_DAYS` (var) | 3 — sessions idle this long are dropped **whole** |
 
-**Admission** — off unless asked for. See `docs/M6-limits.md`.
+**Admission** — off unless asked for.
 
 | | |
 |---|---|
