@@ -164,6 +164,25 @@ it — a client never supplies any part of the name, so it cannot address anothe
 user's session. Human logins and service tokens both work and get separate
 shards.
 
+### Verified from a clean clone
+
+This path was walked end to end on 2026-08-18: a fresh `git clone`, `pnpm
+install`, and the three commands above, deploying under `-probe` names on a
+second set of Workers, then torn down. All three deployed; the SPA and its
+assets served; the API answered `503 access-not-configured`, which is what an
+un-Accessed deployment is supposed to say.
+
+It found one bug, which is what the exercise was for. That 503 was only on
+`/api`, so a deployment without an Access application served its **entire UI to
+the internet** while its API refused — invisible from any existing deployment,
+because every one of them has Access configured and the unconfigured path had
+never run anywhere. An unprotected deployment now serves nothing.
+
+Two deviations, both artefacts of testing on the same account: the Workers were
+renamed, and `workers_dev` was turned on to get a reachable URL. The Access
+application itself was not recreated, so the *configured* half of this section
+remains unverified from zero.
+
 ## Everything else is optional
 
 The deployment above runs. Each of these adds one capability and none is

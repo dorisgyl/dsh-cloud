@@ -186,6 +186,33 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url)
 
+    // An unprotected deployment serves nothing, not even the shell.
+    //
+    // The 503 below existed only on /api, so a deployment with no Access
+    // application answered `access-not-configured` to its API and served its
+    // entire UI to the internet. Found by deploying this repository from a
+    // clean clone, which is the only way it could have been: every existing
+    // deployment has Access configured, so the unconfigured path had never run
+    // anywhere.
+    //
+    // The same shape as the admission gate one commit earlier -- the assets
+    // branch runs before every check, so any guard written after it guards
+    // nothing that a browser actually loads.
+    //
+    // This stops the document and the API. It does NOT stop the other ~120
+    // static files: `run_worker_first` lists two paths, so everything else is
+    // answered by the asset server before this Worker runs, and no check here
+    // can reach them. Listing them all would buy a Worker invocation per
+    // stylesheet to protect compiled artifacts that are already in the public
+    // repository -- and with Access configured, which is the only supported
+    // state, Access gates the hostname ahead of all of it.
+    if (!isConfigured(env)) {
+      return Response.json(NOT_PROTECTED, {
+        status: 503,
+        headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
+      })
+    }
+
     // The gate, before the document.
     //
     // It used to live inside the /api branch below, which meant the entire UI
