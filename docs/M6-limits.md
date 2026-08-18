@@ -280,6 +280,47 @@ look. A refusal carries `identityShape`: key names only, never values, because
 an operator needs the keys and a stranger reading a 403 must not receive
 somebody's email address.
 
+## Storage: the cost the meters could not see
+
+The four meters bound what a user *spends*; storage is what a user *leaves*.
+`session_event` grows about 3.4 KB a turn — `M1-growth-measurement.md` measured
+`request/header` alone at 9 KB, 71.9% of the bytes — and nothing on the ledger
+touched it, so a user well inside every quota could accumulate without limit.
+
+**Sessions expire whole, after `SESSION_RETENTION_DAYS` (3) of no activity.**
+
+The unit matters more than the number. "Delete events older than three days"
+truncates a long conversation from the front, and the agent replays its log to
+rebuild history — so it would resume with the beginning missing, continue
+confidently, and report nothing wrong. A session exists complete or not at all.
+
+Three cases that a careless sweep destroys, each verified:
+
+| | |
+|---|---|
+| a conversation started ten days ago and used today | **kept** — idleness is `MAX(at)`, not creation time |
+| rows written before the `at` column existed (`at = 0`) | **kept** — an unknown timestamp is not evidence of age, and treating it as one deletes the oldest and most wanted history on the first run |
+| the session the current request is for | **kept** — otherwise returning to a conversation after a week is what deletes it |
+
+`session_event` never had a time column; the time lives inside the event JSON,
+which is what once produced `no such column: time` from a search that then
+reported "no matches" across 982 matching rows. Retention has to scan it, so
+`at` is a real column, added by a guarded `ALTER TABLE` — `CREATE TABLE IF NOT
+EXISTS` does not add a column to a table that already exists.
+
+**The sweep runs on `fetch`, not on an alarm.** This object already owns one
+alarm for the turn queue and a Durable Object has exactly one; making a job with
+no deadline negotiate for that slot is not worth it. Throttled to once an hour
+per isolate, because a sweep is a full scan and doing it per request costs more
+than the storage it reclaims. An object nobody touches is never swept — and is
+also not growing.
+
+**Storage is reported, not capped.** The other four meters are spent and gone;
+this one accumulates and stays. What bounds it is retention. A cap that refused
+writes would break a conversation mid-turn to save a few kilobytes, which is the
+wrong trade in a way the other meters never face. `/api/usage` carries
+`storage.bytes`, a per-table breakdown, the session count and the last sweep.
+
 ## Turning it on, in the order that cannot lock you out
 
 ```

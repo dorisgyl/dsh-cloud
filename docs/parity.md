@@ -277,6 +277,10 @@ load without them.
   commands, prompt sections, a five-method capability face, per-plugin
   permissions, and two scopes. What is missing is signing and provenance:
   installing one is still trusting whoever wrote it.
+- **Storage retention**: sessions idle for `SESSION_RETENTION_DAYS` (3) are
+  dropped whole, never trimmed event-by-event — the agent replays its log, so a
+  truncated one resumes with its beginning missing and says nothing. Storage is
+  reported on `/api/usage` rather than capped; retention is what bounds it.
 - **E2B execution tier** (design 10.6.2's third tier).
 - **The tenant object** (U3), and with it per-tenant settings and quotas.
 - **R2 cold storage** for the session log.

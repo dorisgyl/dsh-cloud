@@ -27,6 +27,7 @@ import { BrowserRunFetchProvider, SELECTION } from '../../../packages/cf-web-bro
 import { TavilySearchProvider } from '../../../packages/cf-web-search-tavily/src/index.mjs'
 import { Budget, LIMITS } from '../../../packages/cf-budget/src/index.mjs'
 import { Admission } from '../../../packages/cf-admission/src/index.mjs'
+import { sweepExpiredSessions } from '../../../packages/cf-session-persistence-do/src/index.mjs'
 import { DuckDuckGoSearchProvider } from '../../../packages/cf-web-search-duckduckgo/src/index.mjs'
 import { CfCredentialsDo } from '../../../packages/cf-credentials-do/src/index.mjs'
 import { CfSessionQueryDo } from '../../../packages/cf-session-query-do/src/index.mjs'
@@ -823,6 +824,63 @@ export class SessionAgentDO extends DurableObject {
     if (result === null) this.meter(spend)
   }
 
+  /**
+   * Drop sessions nobody has touched in a while.
+   *
+   * On `fetch` rather than on an alarm, because this object already owns one
+   * alarm for the turn queue and a Durable Object has exactly one. Re-arming it
+   * for retention would mean the queue and the sweep negotiating over a single
+   * slot, for a job with no deadline.
+   *
+   * Throttled per isolate: a sweep is a full scan of `session_event`, and doing
+   * it on every request would cost more than the storage it reclaims. An object
+   * nobody touches is never swept -- and is also not growing, which is the
+   * thing being bounded.
+   */
+  sweepSessions(now = Date.now()) {
+    const days = Number(this.env?.SESSION_RETENTION_DAYS ?? 3)
+    if (!Number.isFinite(days) || days <= 0) return
+    if (this.sweptAt && now - this.sweptAt < 60 * 60_000) return
+    this.sweptAt = now
+    try {
+      const result = sweepExpiredSessions(this.sql, {
+        now,
+        retentionMs: days * 86_400_000,
+        // Never the session this request is for. A conversation resumed after
+        // the retention window would otherwise be deleted by the very request
+        // that came back to it.
+        keepIds: [this.sessionId],
+      })
+      if (result.swept?.length) {
+        this.lastSweep = { at: new Date(now).toISOString(), ...result }
+        console.log(`[retention] swept ${result.swept.length} session(s) idle over ${days}d`)
+      }
+    } catch (error) {
+      this.lateErrors?.push({ specifier: 'retention', error: String(error?.message ?? error) })
+    }
+  }
+
+  /** Bytes this object is holding, by table. */
+  storageReport() {
+    const size = (table, expr = '*') => {
+      try {
+        return Number(this.sql.exec(`SELECT COALESCE(SUM(${expr}), 0) AS b FROM ${table}`).toArray()[0]?.b ?? 0)
+      } catch { return 0 }
+    }
+    const events = size('session_event', 'LENGTH(event)')
+    const headers = size('session_header', 'LENGTH(meta)')
+    const attachments = size('attachment', 'LENGTH(bytes)')
+    return {
+      bytes: events + headers + attachments,
+      byTable: { session_event: events, session_header: headers, attachment: attachments },
+      sessions: (() => {
+        try { return Number(this.sql.exec('SELECT COUNT(DISTINCT id) AS n FROM session_event').toArray()[0]?.n ?? 0) } catch { return 0 }
+      })(),
+      retentionDays: Number(this.env?.SESSION_RETENTION_DAYS ?? 3),
+      lastSweep: this.lastSweep ?? null,
+    }
+  }
+
   async fetch(request) {
     const url = new URL(request.url)
     this.tenantId = request.headers.get('x-dsh-tenant') ?? this.tenantId
@@ -830,6 +888,7 @@ export class SessionAgentDO extends DurableObject {
     // Whatever the last request left pending. Cheap when there is nothing,
     // and it bounds how long an unreported spend can sit here.
     if (this.pending && Object.keys(this.pending).length) this.flushMeters().catch(() => {})
+    this.sweepSessions()
 
     // The browser's two downlinks, which are WebSockets and NOT the socket
     // below.
@@ -1018,7 +1077,14 @@ export class SessionAgentDO extends DurableObject {
     // What this user has spent, readable from the UI without a probe.
     if (url.pathname === '/usage') {
       const report = await this.ledger('', {})
-      return Response.json(report ?? { error: 'the ledger could not be reached' })
+      return Response.json({
+        ...(report ?? { error: 'the ledger could not be reached' }),
+        // Storage is the one cost the four meters never saw: it is not spent
+        // per request, it accumulates and stays. Reported rather than capped,
+        // because what bounds it is retention, and a cap that refuses writes
+        // would break a conversation mid-turn to save a few kilobytes.
+        storage: this.storageReport(),
+      })
     }
 
     // A user's meters. Like /plugin-store, this never builds the tree: it is

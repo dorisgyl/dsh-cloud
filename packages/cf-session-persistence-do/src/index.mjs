@@ -33,12 +33,74 @@ const DDL = [
   `CREATE INDEX IF NOT EXISTS session_event_by_id ON session_event (id, seq)`,
 ]
 
+/**
+ * When each row was written, for retention.
+ *
+ * A separate statement because `CREATE TABLE IF NOT EXISTS` does not add a
+ * column to a table that already exists, and this deployment has tables that
+ * predate the column. Durable Object SQLite has no `ADD COLUMN IF NOT EXISTS`,
+ * so the duplicate is caught and ignored -- the same shape as the plugin
+ * permissions migration, and for the same reason.
+ *
+ * The time is stored here rather than read out of the event JSON because
+ * retention has to scan it. `session_event` has no `time` column and never did;
+ * a query that assumed one is what produced `no such column: time` from a
+ * search that then reported "no matches" over 982 matching rows.
+ */
+const MIGRATIONS = [
+  'ALTER TABLE session_event ADD COLUMN at INTEGER NOT NULL DEFAULT 0',
+]
+
+/**
+ * Delete whole sessions that have been idle longer than `retentionMs`.
+ *
+ * WHOLE sessions, deliberately. Deleting events older than a cutoff would
+ * truncate a long-running conversation from the front: the agent replays its
+ * log to rebuild history, so it would resume with the beginning missing, carry
+ * on confidently, and report nothing wrong. A session either exists complete or
+ * does not exist.
+ *
+ * Idleness is `MAX(at)` per session, not creation time -- a conversation
+ * someone returns to every day should not expire on its third day.
+ *
+ * Rows written before the `at` column existed carry 0 and would look infinitely
+ * old. They are excluded rather than swept: an unknown timestamp is not
+ * evidence of age, and using it as one would delete exactly the oldest and most
+ * likely wanted history the first time this ran.
+ */
+export function sweepExpiredSessions(sql, { now = Date.now(), retentionMs, keepIds = [] } = {}) {
+  if (!Number.isFinite(retentionMs) || retentionMs <= 0) return { swept: [], skipped: 'retention disabled' }
+  const cutoff = now - retentionMs
+  const rows = sql
+    .exec('SELECT id, MAX(at) AS lastAt, COUNT(*) AS events FROM session_event GROUP BY id')
+    .toArray()
+
+  const swept = []
+  for (const row of rows) {
+    const lastAt = Number(row.lastAt ?? 0)
+    if (lastAt === 0) continue
+    if (lastAt >= cutoff) continue
+    if (keepIds.includes(row.id)) continue
+    sql.exec('DELETE FROM session_event WHERE id = ?', row.id)
+    sql.exec('DELETE FROM session_header WHERE id = ?', row.id)
+    swept.push({ id: row.id, events: Number(row.events), lastAt: new Date(lastAt).toISOString() })
+  }
+  return { swept, cutoff: new Date(cutoff).toISOString(), examined: rows.length }
+}
+
 /** The storage half: everything the coordinator delegates downwards. */
 export class DoSqlitePersistenceBackend {
   constructor(sql) {
     this.name = 'do-sqlite'
     this.sql = sql
     for (const statement of DDL) sql.exec(statement)
+    for (const statement of MIGRATIONS) {
+      try {
+        sql.exec(statement)
+      } catch (error) {
+        if (!/duplicate column/i.test(String(error?.message ?? error))) throw error
+      }
+    }
   }
 
   maxSeq(id) {
@@ -103,8 +165,8 @@ export class DoSqlitePersistenceBackend {
         throw new Error(`cf-session-persistence-do: event "${event?.type}" is not JSON-serializable`, { cause })
       }
       this.sql.exec(
-        'INSERT INTO session_event (id, seq, type, event) VALUES (?, ?, ?, ?)',
-        meta.id, event.seq, event.type, serialized,
+        'INSERT INTO session_event (id, seq, type, event, at) VALUES (?, ?, ?, ?, ?)',
+        meta.id, event.seq, event.type, serialized, Date.now(),
       )
     }
   }

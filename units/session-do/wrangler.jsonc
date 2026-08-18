@@ -40,6 +40,12 @@
   //
   // Absent, cf-web-browser-run uses the binding and says so in /web-probe.
 
+  // How long a session survives without being touched. Whole sessions are
+  // dropped, never individual events: the agent replays its log to rebuild
+  // history, so trimming the front of a long conversation would resume it with
+  // the beginning missing and no error anywhere. 0 disables retention.
+  "vars": { "SESSION_RETENTION_DAYS": "3" },
+
   "worker_loaders": [{ "binding": "LOADER" }],
 
   "durable_objects": {
