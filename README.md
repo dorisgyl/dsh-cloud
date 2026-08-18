@@ -9,6 +9,35 @@ Serverless, hibernates when idle, and **keeps working after you close the tab**.
 Deploy it to **your own** Cloudflare account. You bring the account and the model
 key; nothing here asks you to sign up for anything of ours.
 
+<!-- Inline playback on github.com needs a `github.com/user-attachments/assets/…`
+     URL, which only exists for files uploaded through GitHub's own web UI
+     (drag the file into an issue draft and copy the URL it produces). A bare
+     one of those, alone on a line, becomes a player. A `raw` link to a file in
+     the repository does not: raw.githubusercontent serves mp4 with a
+     content-type the renderer will not treat as video.
+
+     Until then this is a poster that links to the file. It renders everywhere,
+     including in clones and on other Git hosts, which the attachment URL does
+     not. Keep media/demo.mp4 committed either way. -->
+
+[![dsh-cloud demo](media/demo-poster.png)](https://github.com/dorisgyl/dsh-cloud/raw/main/media/demo.mp4)
+
+*36 seconds: the agent writes `primes.js`, runs it with `node`, and shows the
+output — the model, the filesystem and the shell in one turn, on a live
+deployment. Click to play.*
+
+## Try the demo
+
+**<https://dsh-cloud-demo.nevoflux.app/>**
+
+Sign in with **GitHub**, and **star this repository** — the deployment admits
+GitHub accounts that have starred it, and nobody else. The star list refreshes
+about once a minute, so a star given just now takes a moment to take effect.
+
+That gate is not decoration; it is the admission control described further down,
+running. Someone has to pay for every model turn, container second and browser
+second an agent spends, and on this deployment that is one person.
+
 ---
 
 ## Status: work in progress
