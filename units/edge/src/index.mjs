@@ -48,9 +48,23 @@ function shapeOf(value, depth = 2) {
  * depend on a click that can be undone by another click.
  */
 async function admit(request, env, claims) {
-  const admins = String(env.ADMIN_USERS ?? '').split(',').map((s) => s.trim()).filter(Boolean)
-  if (admins.includes(claims.user) || (claims.email && admins.includes(claims.email))) {
-    return { ok: true, via: 'ADMIN_USERS' }
+  // ADMISSION_BYPASS_USERS, not ADMIN_USERS.
+  //
+  // One name was gating two unrelated powers: who may skip the star check
+  // (here) and who may install a plugin for every user of the deployment (the
+  // session object). An operator can easily want different answers -- this
+  // deployment's owner wants their own GitHub account subject to the star
+  // gate, precisely so the gate stays honest, while still being the only
+  // person who can install plugins.
+  //
+  // Empty by default, and that is not a placeholder. Login is GitHub-only
+  // here, so any bypass entry is a GitHub account that skips the gate
+  // permanently -- and the operator's escape hatch is `wrangler secret delete
+  // ADMISSION_REQUIRE_STAR` from their own terminal, which no misconfiguration
+  // of this list can take away.
+  const bypass = String(env.ADMISSION_BYPASS_USERS ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+  if (bypass.length && (bypass.includes(claims.user) || (claims.email && bypass.includes(claims.email)))) {
+    return { ok: true, via: 'ADMISSION_BYPASS_USERS' }
   }
 
   const token = /(?:^|;\s*)CF_Authorization=([^;]+)/.exec(request.headers.get('cookie') ?? '')?.[1]
@@ -273,7 +287,7 @@ export default {
         admission: {
           enabled: env.ADMISSION_REQUIRE_STAR === '1',
           repo: env.GITHUB_REPO || 'dorisgyl/dsh-cloud',
-          admins: String(env.ADMIN_USERS ?? '').split(',').filter(Boolean).length,
+          bypassUsers: String(env.ADMISSION_BYPASS_USERS ?? '').split(',').filter(Boolean).length,
         },
       })
     }
@@ -310,7 +324,7 @@ export default {
         wouldAdmit: verdict.ok,
         verdict,
         note: verdict.via === 'ADMIN_USERS'
-          ? 'admitted by the operator bypass, NOT by a star -- this says nothing about the star check'
+          ? 'admitted by ADMISSION_BYPASS_USERS, NOT by a star -- this says nothing about the star check'
           : 'this is the star check answering',
       })
     }
