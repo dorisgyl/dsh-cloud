@@ -120,10 +120,14 @@ GitHub allows 60 requests an hour and a five-minute TTL spends twelve.
 
 Three defaults, each for a reason:
 
-- **`ADMIN_USERS` bypasses the star check, first and unconditionally.** The repo
-  has zero stars, so opening the gate without a bypass locks out everyone
-  including whoever opened it — and an operator's way back in should not depend
-  on a click that another click can undo.
+- **`ADMISSION_BYPASS_USERS` skips the star check, first and unconditionally —
+  and is empty.** It was `ADMIN_USERS`, which also decides who may install a
+  plugin for every user of the deployment; one name over two unrelated powers,
+  and this operator wants different answers to them. Empty is the honest
+  default now that login is GitHub-only: any entry is an account permanently
+  outside the gate. The way back in is `wrangler secret delete
+  ADMISSION_REQUIRE_STAR` from the operator's terminal, which no
+  misconfiguration inside the deployment can take away.
 - **The gate is off unless `ADMISSION_REQUIRE_STAR=1`.** A stranger who clones
   this repository inherits its code, not its guest list. Their repo is not
   `dorisgyl/dsh-cloud`, and a gate checking someone else's stargazers is an
