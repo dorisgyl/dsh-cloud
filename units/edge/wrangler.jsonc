@@ -38,20 +38,22 @@
     ]
   },
 
+  // TENANT only. The Access application's team domain and AUD used to sit here
+  // as vars, carrying one deployment's real values into every clone -- and the
+  // README told operators to set them with `wrangler secret put`, which a var
+  // of the same name silently overrides. A stranger following the instructions
+  // exactly would have been pointed at somebody else's Access application.
+  //
+  // They are secrets now, per deployment:
+  //
+  //   npx wrangler secret put ACCESS_TEAM_DOMAIN   # <team>.cloudflareaccess.com
+  //   npx wrangler secret put ACCESS_AUD           # the application's AUD tag
+  //
+  // Absent, the edge answers 503 `access-not-configured` rather than serving an
+  // unprotected agent.
   "vars": {
-    "TENANT": "default",
-
-    // From the hostname-based Access application (Zero Trust > Access >
-    // Applications > Self-hosted). Worker-level Access would populate
-    // `ctx.access` and need none of this, but it breaks WebSocket upgrades —
-    // measured, see docs/M1-access.md.
-    "ACCESS_TEAM_DOMAIN": "yellow-rain-3570.cloudflareaccess.com",
-    "ACCESS_AUD": "71566fd1b03df3cdf0afbfcf3e6ecbd73b3535fded3a6bdff146a2e8e6cde6c4"
-
-    // Local development sets DEV_IDENTITY instead; it is ignored whenever the
-    // two values above are present, so a deployment cannot fall back into it.
+    "TENANT": "default"
   }
-
   // `workers_dev` is deliberately absent. *.workers.dev is blocked outright on
   // some networks, and the failure is invisible: the browser's fetch dies
   // before the WebSocket upgrade, so nothing reaches the Worker's logs and it

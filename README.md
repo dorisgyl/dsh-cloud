@@ -86,21 +86,42 @@ Only the minimal tier exists today.
 
 ## Deploy
 
+Three Workers, deployed in dependency order. The build steps are not optional:
+`main` in each `wrangler.jsonc` points at a **generated** bundle, and
+`wrangler deploy` does not know that — it will happily publish a stale one,
+report success, and hand you a fresh version ID for old code.
+
 ```bash
 git clone <this repo> && cd dsh-cloud
 pnpm install
 
-# Expand the upstream plugin set and bundle both units
-node scripts/m0-bundle.mjs
-node scripts/build-edge.mjs
-
-# Deploy the session object first — the edge binds to it by name
-cd units/session-do && npx wrangler deploy && cd ../..
-cd units/edge      && npx wrangler deploy && cd ../..
+npm run deploy:exec     # the container: shell, files, terminal
+npm run deploy:do       # the session object; the edge binds to it by name
+npm run deploy:edge     # the edge; builds the client graph, then deploys
 ```
 
-Then protect `dsh-edge` with **Cloudflare Access**. Zero Trust must be enabled
-on the account.
+`npm run deploy` does the last two. Each script runs its bundler first.
+
+**Skipping `deploy:exec`** leaves a working deployment with no execution world:
+the shell, filesystem and terminal seams stay unfilled and their tools never
+register. That is a supported tier, not a broken one — see the table above — but
+it is a choice, so make it deliberately.
+
+### Attach your hostname
+
+Every unit ships with `workers_dev: false`. Add a custom domain or a route to
+`dsh-edge` (Workers & Pages → dsh-edge → Settings → Domains & Routes). The other
+two are reached only through it and must stay unreachable from the internet:
+`dsh-session-do` and `dsh-exec` run arbitrary code.
+
+Do not deploy on `*.workers.dev` — it is blocked outright on some networks, and
+the failure is invisible from the browser: the fetch dies before the WebSocket
+upgrade, so nothing reaches the Worker's logs and it looks like the service is
+down.
+
+### Protect it with Cloudflare Access
+
+Zero Trust must be enabled on the account.
 
 > **Use a hostname-based application, not the Worker's Access tab.**
 > Worker-level Access policies do not support WebSockets: an upgrade request to
@@ -108,34 +129,100 @@ on the account.
 > Worker-level Access would break it while looking correctly configured.
 
 Create it in **Zero Trust → Access → Applications → Self-hosted**, with your
-deployment's hostname as the application domain. Add an `Allow` policy for
-whoever should sign in. For machine access — CI, scripted tests — add a second
-policy with **Action: Service Auth** and a service token. (The `Service Token`
-selector only appears once the action is `Service Auth`, which is easy to miss.)
+hostname as the application domain, and add an `Allow` policy for whoever should
+sign in. For machine access — CI, scripted tests — add a second policy with
+**Action: Service Auth** and a service token. (The `Service Token` selector only
+appears once the action is `Service Auth`, which is easy to miss.)
 
 Then point the edge at that application:
 
 ```bash
-npx wrangler secret put ACCESS_TEAM_DOMAIN   # <your-team>.cloudflareaccess.com
-npx wrangler secret put ACCESS_AUD           # the application's AUD tag
+npx wrangler secret put ACCESS_TEAM_DOMAIN --config units/edge/wrangler.jsonc
+npx wrangler secret put ACCESS_AUD         --config units/edge/wrangler.jsonc
 ```
 
-The edge verifies the assertion, reduces it to `tenant` / `user` / `scopes`, and
-derives every Durable Object name from it — a client never supplies any part of
-the name, so it cannot address another user's session. Human logins and service
-tokens are both accepted and get separate shards.
+Both are **secrets, not vars**. A var of the same name silently overrides a
+secret, so an earlier version of this file — which shipped one deployment's real
+values in `wrangler.jsonc` — pointed every clone at somebody else's Access
+application no matter what its operator set.
+
+Without them the edge answers `503 access-not-configured` rather than serving an
+unprotected agent. To check which application a hostname is actually behind,
+without signing in:
+
+```bash
+curl -s -o /dev/null -w "%{redirect_url}
+" https://<your-host>/api/version
+```
+
+The `kid=` in the redirect is the AUD that hostname really uses.
 
 There is nothing to configure in code. Access authenticates before the request
-reaches the Worker, and the identity arrives as a runtime API:
+reaches the Worker, and the identity arrives as a runtime API. The edge reduces
+it to `tenant` / `user` / `scopes` and derives every Durable Object name from
+it — a client never supplies any part of the name, so it cannot address another
+user's session. Human logins and service tokens both work and get separate
+shards.
 
-```js
-const identity = await ctx.access.getIdentity()   // undefined if not authenticated
-```
+## Everything else is optional
 
-So there is no login page to build, no account system to run, and no token to
-verify. The edge reduces that identity to `tenant` / `user` / `scopes` and
-derives every Durable Object name from it — a client never supplies any part of
-the name, so it cannot address another user's session.
+The deployment above runs. Each of these adds one capability and none is
+required; every one is a secret unless marked otherwise.
+
+**Model** — Workers AI is the zero-configuration default and needs nothing.
+
+| | |
+|---|---|
+| `AI_MODEL` (var) | override the default Workers AI model |
+| `DEEPSEEK_API_KEY` | DeepSeek's API, and the `web_search` provider that runs on it |
+
+**Web access** — `web_fetch` works out of the box on the `browser` binding, at
+Browser Run's default browser, billed by browser-time.
+
+| | |
+|---|---|
+| `CF_ACCOUNT_ID` + `BROWSER_RUN_TOKEN` | switch to Kitesurf over REST — free during its beta, ~2.5× slower per fetch |
+| `WEB_TRANSPORT=binding` (var) | decline Kitesurf and keep the faster default |
+| `TAVILY_API_KEY` | a second `web_search` provider. Two usable providers need `DSH_WEB_SEARCH_PROVIDER` to name one, or every search fails ambiguous |
+
+**Limits** — all four meters are on by default, per user. `0` disables one.
+
+| | default |
+|---|---|
+| `LIMIT_REQUESTS_PER_MINUTE` | 240 |
+| `LIMIT_MODEL_TURNS_PER_DAY` | 100 |
+| `LIMIT_CONTAINER_MS_PER_DAY` | 900000 |
+| `LIMIT_BROWSER_MS_PER_DAY` | 300000 |
+| `SESSION_RETENTION_DAYS` (var) | 3 — sessions idle this long are dropped **whole** |
+
+**Admission** — off unless asked for. See `docs/M6-limits.md`.
+
+| | |
+|---|---|
+| `ADMISSION_REQUIRE_STAR=1` (edge) | require a GitHub login that has starred the repo |
+| `GITHUB_REPO` (var) | which repo. Defaults to this one, which is wrong for your fork |
+| `GITHUB_TOKEN` | **required** if the gate is on: `GET /stargazers` answers 401 unauthenticated, for every repo. A token with no scopes is enough |
+| `ADMISSION_BYPASS_USERS` (edge) | accounts that skip the star check. Empty by default |
+| `ADMIN_USERS` (session object) | accounts that may install a plugin for every user. Deliberately a different list |
+
+**The rest**, for completeness — everything the code reads is listed here,
+because a variable that only exists in the source is a variable nobody will
+find.
+
+| | |
+|---|---|
+| `ADMISSION_TTL_MS` | how long a revoked star keeps working. Default 60000 |
+| `DSH_WEB_FETCH_PROVIDER` / `DSH_WEB_SEARCH_PROVIDER` (vars) | name a provider when more than one is usable |
+| `DEEPSEEK_SEARCH_BASE_URL` | the search endpoint, distinct from the chat one |
+| `WEB_SEARCH_DUCKDUCKGO=1` | a keyless search provider that **does not work**: DuckDuckGo answers 522 to a Worker and a bot challenge to the container. Kept with its measurements in `cf-web-search-duckduckgo` |
+| `TENANT` (var) | the shard name. `default` unless you run more than one |
+| `DEV_IDENTITY` | local development only; ignored whenever Access is configured |
+
+Turn the gate on in the order that cannot lock you out: star the repo, set
+`GITHUB_TOKEN`, check `/api/admission-check` (which is exempt from the gate,
+because being refused must not mean being unable to find out why), and only then
+set `ADMISSION_REQUIRE_STAR`. `wrangler secret delete ADMISSION_REQUIRE_STAR` is
+the way back in, and it does not depend on being able to sign in.
 
 ## Run it locally
 
