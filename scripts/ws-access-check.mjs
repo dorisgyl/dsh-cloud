@@ -7,7 +7,7 @@ import WebSocket from 'ws'
 const env = Object.fromEntries(
   readFileSync('.access-token', 'utf8').trim().split('\n').map((l) => l.split('=')),
 )
-const url = 'wss://dsh-edge.gansamuel03.workers.dev/api/'
+const url = process.env.DSH_URL ?? 'wss://dsh-cloud-demo.nevoflux.app/api/'
 const ws = new WebSocket(url, {
   headers: {
     'CF-Access-Client-Id': env.CF_ACCESS_CLIENT_ID,
