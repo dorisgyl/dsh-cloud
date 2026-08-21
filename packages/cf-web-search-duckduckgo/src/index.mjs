@@ -154,6 +154,15 @@ export function classify(html, status) {
   return { kind: 'results' }
 }
 
+/** Wait, and stop waiting if the caller gives up first. */
+function sleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve() }, ms)
+    function onAbort() { clearTimeout(timer); reject(signal.reason) }
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
 export class DuckDuckGoSearchProvider {
   constructor(config = {}) {
     this.id = config.id ?? 'duckduckgo'
@@ -161,6 +170,27 @@ export class DuckDuckGoSearchProvider {
     this.endpoint = config.endpoint ?? ENDPOINT
     this.calls = 0
     this.blocked = 0
+
+    // One request in flight at a time, spaced.
+    //
+    // Since upstream 0.1.0-rc.8 `web_search` takes a LIST of queries and runs
+    // them concurrently -- four by default. Four simultaneous scrapes of an
+    // HTML endpoint from one datacenter address is the fastest way to turn the
+    // occasional challenge measured above into a permanent one, and this is the
+    // provider that has no API to fall back on.
+    //
+    // Serialising also makes the batch cheaper when it IS refused. Upstream
+    // aborts the siblings on the first failure and rethrows it, so a serialised
+    // batch that gets challenge-walled on its first query never issues the other
+    // three; a concurrent one has already sent all four before the first answer
+    // comes back. One refusal instead of four, from the same code path.
+    //
+    // The cost is latency: four queries become four round trips in a row, which
+    // is why `dsh-tool-web` is configured with a lower query bound wherever this
+    // provider is the active one (see the DO's plugin config).
+    this.gate = Promise.resolve()
+    this.lastRequestAt = 0
+    this.minGapMs = config.minGapMs ?? 250
     // Kept so a deployment can see the refusal rate without reading logs. A
     // provider that works in testing and is refused in production is the
     // expected trajectory here, not a surprise.
@@ -178,6 +208,30 @@ export class DuckDuckGoSearchProvider {
     return this.enabled !== false
   }
 
+  /**
+   * Wait for this provider's turn, then hold it until the returned release runs.
+   *
+   * The abort signal is honoured WHILE queued, not only once the request is in
+   * flight: a batch whose first query was refused aborts its siblings, and a
+   * sibling still waiting here must leave without issuing anything. Releasing
+   * happens in a `finally`, so an abort mid-queue cannot strand the chain.
+   */
+  async takeTurn(abort) {
+    const previous = this.gate
+    let release
+    this.gate = new Promise((resolve) => { release = resolve })
+    try {
+      await previous
+      const gap = this.minGapMs - (Date.now() - this.lastRequestAt)
+      if (this.lastRequestAt !== 0 && gap > 0) await sleep(gap, abort)
+      if (abort?.aborted) throw abort.reason
+    } catch (error) {
+      release()
+      throw error
+    }
+    return () => { this.lastRequestAt = Date.now(); release() }
+  }
+
   async search(request, signal) {
     const query = String(request?.query ?? '').trim()
     if (!query) throw new WebError('a search needs a query', 'WEB_SEARCH_INVALID_REQUEST')
@@ -186,7 +240,21 @@ export class DuckDuckGoSearchProvider {
     const timeout = AbortSignal.timeout(this.timeoutMs)
     const abort = signal ? AbortSignal.any([signal, timeout]) : timeout
 
+    // The per-request deadline covers the wait for a turn as well as the
+    // request. That is deliberate: the tool call has one budget, and a query
+    // that spent all of it queued behind its siblings has failed to answer
+    // within it, whichever half the time went to.
+    let release
     let response
+    let html
+    try {
+      release = await this.takeTurn(abort)
+    } catch (error) {
+      if (signal?.aborted) throw new WebError('the caller cancelled this search', 'WEB_CANCELLED', { cause: error })
+      throw new WebError(
+        `DuckDuckGo did not get a turn within ${this.timeoutMs}ms`, 'WEB_SEARCH_TIMEOUT', { cause: error })
+    }
+
     try {
       response = await fetch(`${this.endpoint}?q=${encodeURIComponent(query)}`, {
         headers: {
@@ -196,15 +264,17 @@ export class DuckDuckGoSearchProvider {
         },
         signal: abort,
       })
+      html = await response.text()
     } catch (error) {
       if (signal?.aborted) throw new WebError('the caller cancelled this search', 'WEB_CANCELLED', { cause: error })
       if (error?.name === 'TimeoutError') {
         throw new WebError(`DuckDuckGo did not answer within ${this.timeoutMs}ms`, 'WEB_SEARCH_TIMEOUT', { cause: error })
       }
       throw new WebError(`DuckDuckGo request failed: ${String(error?.message ?? error)}`, 'WEB_PROVIDER_FAILED', { cause: error })
+    } finally {
+      release()
     }
 
-    const html = await response.text()
     const outcome = classify(html, response.status)
     this.lastOutcome = outcome.kind
 

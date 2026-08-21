@@ -459,6 +459,21 @@ export class SessionAgentDO extends DurableObject {
           ...(this.env?.DSH_WEB_SEARCH_PROVIDER ? { searchProvider: this.env.DSH_WEB_SEARCH_PROVIDER } : {}),
           ...(this.env?.DSH_WEB_FETCH_PROVIDER ? { fetchProvider: this.env.DSH_WEB_FETCH_PROVIDER } : {}),
         },
+        // How many queries one `web_search` call may carry.
+        //
+        // Upstream 0.1.0-rc.8 turned `web_search` into a batch tool: the model
+        // sends a LIST of queries and the seam runs them concurrently, four by
+        // default. That default assumes a search API. It is left alone here for
+        // Tavily and for upstream's DeepSeek provider, which have one.
+        //
+        // The keyless DuckDuckGo provider does not, and it serialises its own
+        // requests rather than scrape one HTML endpoint four ways at once (see
+        // cf-web-search-duckduckgo). Serialised, four queries are four round
+        // trips in sequence against a 30s tool budget and a 20s per-request
+        // deadline -- the last one can only fail. Two fits.
+        ...(this.env?.WEB_SEARCH_DUCKDUCKGO === '1'
+          ? { '@deepseek-ai/dsh-tool-web': { searchMaxQueries: 2 } }
+          : {}),
       },
       settleMs: 1500,
       // Every upstream plugin becomes a loader entry, so the deployment is
