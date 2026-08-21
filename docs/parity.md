@@ -1,13 +1,21 @@
 # Parity with upstream DeepSeek Harness
 
-**Date**: 2026-08-16
-**Upstream closure**: 195 packages. **U2 installs**: 97. **Browser plugins**: 34.
+**Date**: 2026-08-20
+**Upstream version**: `@deepseek-ai/*` @ `0.1.0-rc.8`
+**Upstream closure**: 195 packages. **U2 installs**: 99. **Browser plugins**: 35 of 41.
 
 Every line below is derived from the repository, not from memory:
 `scripts/upstream-closure.json` is the crawled upstream dependency closure,
 `scripts/u2-deps.json` is what the agent Worker actually installs, and every
 exclusion carries its reason in `scripts/m0-select.mjs`. Reproduce with
 `node scripts/m0-select.mjs scripts/upstream-closure.json /tmp/deps.json`.
+
+One caveat on the first number: the closure was crawled at `0.1.0-rc.6` and has
+not been re-crawled. Packages upstream added since — `dsh-client-ui-reference`,
+`dsh-client-ui-renderer`, `dsh-client-ui-brand-official`, `dsh-file-reference` —
+are therefore absent from every count here, and cannot reach the browser roster
+until it is. What following rc.8 did and did not change is in
+`rc8-upgrade.md`.
 
 Status column:
 
@@ -63,25 +71,31 @@ Cold start ≈ 3–4.5 s, warm call ≈ 0.8–1.0 s (`M2-execution-world.md`).
 
 ## Tools
 
-13 of upstream's 19 tool packages; 18 tools reach the model.
+13 of upstream's tool packages; 20 tools reach the model.
 
 ```
-ask_user_question  bash       create_goal  edit      get_goal
-interrupt_agent    job_kill   job_list     job_output
-read               read_image send_message skill     subagent
-update_goal        web_fetch  web_search   write
+ask_user_question  bash             create_goal  edit
+exit_plan_mode     get_goal         interrupt_agent
+job_kill           job_list         job_output
+read               read_image       send_message
+skill              subagent         todo_write   update_goal
+web_fetch          web_search       write
 ```
 
 | Not installed | Why |
 |---|---|
 | `dsh-tool-bash-persistent` | registers the same name as `dsh-tool-bash`; one must win, and the one-shot executor always recovers |
-| `dsh-tool-pwsh` | no Windows execution world |
+| `dsh-tool-pwsh` | no Windows execution world — and rc.8's persistent PowerShell sessions do not change that |
 | `dsh-tool-cordis`, `dsh-tool-ralph`, `dsh-tool-workflow` | need a plugin host or an OS shell we do not provide |
-| `dsh-tool-fs-search`, `dsh-tool-str-replace-editor` | not published at this upstream version |
+| `dsh-tool-fs-search` | needs `subprocess.spawn`, which `cf-exec-provider` refuses on purpose, and a native ripgrep binary |
+| `dsh-tool-str-replace-editor` | installable — it needs only `ctx.fs` — and left out as a choice: a second editing interface over the same files as `read`/`write`/`edit` |
 
-`web_fetch` **works**, over `cf-web-browser-run`. `web_search` does not, and the
-two failed for different reasons — which the earlier version of this line got
-wrong by giving them one:
+Both of the last two used to be listed as "not published at this upstream
+version". They are published. The reasons above are the real ones.
+
+`web_fetch` **works**, over `cf-web-browser-run`. `web_search` works only if the
+operator configures it, and the two got there by different roads — which the
+earlier version of this line got wrong by giving them one:
 
 `dsh-web` is an abstract seam, like `dsh-shell` and `dsh-fs`: it publishes
 `ctx.web` and a provider registry, and `dsh-tool-web` advertises both tools over
@@ -97,10 +111,23 @@ Workers AI, it works on `wrangler deploy` with nothing pasted anywhere, while
 every provider upstream ships (Exa, Perplexity, DeepSeek search) needs a key the
 self-deployer has to go get.
 
-**`web_search` stays unfilled.** Quick Actions has no search endpoint, and a
-browser is not a search engine. Fetch runs on Kitesurf, free while in beta,
-selected over the REST endpoint because the binding cannot reach it —
-`M5-web.md` has the measurements and the one wrong turn they caused.
+**`web_search` has no zero-configuration provider.** Quick Actions has no search
+endpoint, and a browser is not a search engine. Fetch runs on Kitesurf, free
+while in beta, selected over the REST endpoint because the binding cannot reach
+it — `M5-web.md` has the measurements and the one wrong turn they caused.
+
+What search has instead is two optional providers, neither of them on by
+default. `TAVILY_API_KEY` registers `cf-web-search-tavily`, which is wired and
+never exercised. `WEB_SEARCH_DUCKDUCKGO=1` registers the keyless one, which is
+kept for its measurements rather than for its results: DuckDuckGo answers a bot
+challenge, and `cf-web-search-duckduckgo` reports that as `WEB_PROVIDER_BLOCKED`
+instead of as zero hits.
+
+Upstream 0.1.0-rc.8 made `web_search` a batch tool — a list of queries, run
+concurrently, four by default. The keyless provider serialises its own requests
+against that, and where it is active `dsh-tool-web` is configured down to two
+queries. `rc8-upgrade.md` has the reasoning; the short version
+is that a refused batch now costs one request instead of four.
 
 ## Model providers
 
@@ -112,7 +139,7 @@ selected over the REST endpoint because the binding cannot reach it —
 | pi-ai / Google GenAI | no | pulls `child_process` through the MCP SDK; 688 KB for one route |
 | MCP tool servers | no | the SDK's transport is stdio; MCP over HTTP needs a different client |
 | Streaming, tool calls, reasoning effort | same | tool calls required real work in the adapter — the model emitted DSML markup as prose until `tools` was actually sent |
-| Image input | no | the bound model is text-only, declared as `inputModalities: ['text']` |
+| Image input | no | the bound model is text-only, declared as `inputModalities: ['text']`. rc.8's `offloadRequestImages` — the bound that keeps accumulated image payloads under a provider limit — is called inside `dsh-llm-deepseek`, so `cf-llm-transport` would have to apply it itself the day a multimodal model is bound here |
 
 ## The web UI
 
@@ -124,16 +151,17 @@ injects the graph as `window.__DSH_BOOT__`.
 | Capability | Status | Note |
 |---|---|---|
 | The SPA itself | same | `dsh-web-frontend/dist`, served from the same origin as `/api` |
-| Client plugin graph | ours | 34 of 40 browser plugins staged and listed |
+| Client plugin graph | ours | 35 of 41 browser plugins staged and listed |
 | RPC surface 1 — `/api/<name>` | same | `dsh-host-apiproxy`, 52 methods, one of them ours |
 | RPC surface 2 — `/api/<ns>/<method>` | same | Typert RPC through `dsh-api-gateway` |
 | Event downlinks | ours | WebSockets for the browser, SSE for non-browser clients — upstream ships both client platforms over the same paths |
 | Web server / static file host | ours | Workers Static Assets; `node:http` has no equivalent |
 | Directory picker | ours | `cf-workspace-picker` serves the `browse` capability over the container; `native` needs a desktop |
-| Plugin management panel | same | read-only, and now real: 70 loader entries, 69 active |
+| Plugin management panel | same | read-only, and now real: 69 loader entries, all active |
 | **Third-party plugins** | **ours** | installed into a running deployment, running in isolates with no network; upstream's authoring model, a narrower `ctx` (`M4-plugins.md`) |
-| Agent presets | no | `dsh-agent-presets` needs the file loader; `session.create` refuses a preset rather than ignoring it |
-| Attachments | ours | `cf-attachments-do` stores images beside the log — **never executed**, because the bound model takes no images |
+| Agent presets | no | `dsh-agent-presets` needs the file loader; `session.create` refuses a preset rather than ignoring it. rc.8 builds Profile Bundles on top of it — Claude Code and Codex installed on demand — which needs runtime installation into a container reclaimed after 5 idle minutes |
+| Attachments | ours | `cf-attachments-do` stores images beside the log — **never executed**, because the bound model takes no images. Still shape-correct: `npm run check:seams` compares its `imageLimits` against the field list upstream validates it with, which is how rc.8's new `maxImageDimension` was caught before a deploy rather than after one |
+| The `@` reference menu | no | new at rc.8 (`dsh-client-ui-reference`), and it wants `dsh-file-reference` and `dsh-session-reference` in the agent Worker. Absent by omission until the closure is re-crawled, not by decision |
 
 Verified in a browser: streaming render, turns surviving the tab closing, tool
 cards, search, multi-session switching, workspace selection, interrupting a
@@ -143,7 +171,7 @@ turn, slash commands, `/export`, `ask_user_question`, subagents.
 
 | Capability | Status | Note |
 |---|---|---|
-| Session log persistence | ours | `cf-session-persistence-do` → Durable Object SQLite |
+| Session log persistence | ours | `cf-session-persistence-do` → Durable Object SQLite. rc.8's "the storage format is incompatible" is upstream's own SQLite backend and does not reach here: this is a `PersistenceBackend` over its own DDL, and that interface did not change. No migration, and no share of the speedup either |
 | Settings | ours | `cf-settings-do` |
 | Credentials | ours | `cf-credentials-do` — Worker secrets, plus a SQLite tier |
 | Key-value storage | ours | `cf-storage-do` |
@@ -191,7 +219,7 @@ Two stay excluded, each for a reason worth keeping:
   the boundary and nothing narrower is enforced inside it. Claiming a mode to
   satisfy this plugin would be the dishonest fix.
 
-47 services, 22 tools, and a boot with nothing in `failed`, `entryErrors` or the
+47 services, 20 tools, and a boot with nothing in `failed`, `entryErrors` or the
 log sink.
 
 ## Runtime composition, and what is still missing from it
@@ -219,7 +247,7 @@ What that buys today: `loader` is live, `dsh-host-plugin-inventory` loads, and
 `pluginInventory/list` answers instead of 404.
 
 And composing the whole tree through it (2026-08-17) is what made the panel
-real: `pluginInventory` went from `{entries: []}` to 70 rows, 69 active. Every
+real: `pluginInventory` went from `{entries: []}` to 69 rows, every one active. Every
 upstream plugin is a loader entry, so the deployment is inspectable as a plugin
 tree rather than as an opaque set of fibers — and third-party plugins are merged
 into the same list, marked `(<scope>, rev …)` with a null phase, because they
@@ -295,3 +323,8 @@ load without them.
   now is — the model fetched the Kitesurf documentation through it and answered
   from the page, including sections and figures that were not in its training
   data. See `M5-web.md`.
+- **Attachments**, for the same reason as `web_search`: the code path is filled,
+  shape-checked and unrun, because the bound model takes no images.
+- **Anything rc.8 added that needs a re-crawled closure.** The `@` reference
+  menu is the first of these. Absent by omission is still absent, and this list
+  is where that has to be said rather than in the roster's silence.

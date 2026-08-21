@@ -133,6 +133,12 @@ npm run deploy:edge     # the edge; builds the client graph, then deploys
 
 `npm run deploy` does the last two. Each script runs its bundler first.
 
+**Deploy those two together.** The browser and the agent speak one versioned
+protocol, and upstream adds required fields to it between releases — the client
+calls `host.describe` before it renders anything and throws on a response it
+cannot parse. Updating one half alone is a white page with an error in the
+console, not a partially updated deployment.
+
 **Skipping `deploy:exec`** leaves a working deployment with no execution world:
 the shell, filesystem and terminal seams stay unfilled and their tools never
 register. That is a supported tier, not a broken one — see the table above — but

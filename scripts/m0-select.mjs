@@ -43,7 +43,14 @@ const EXCLUDE = [
   // with zero Node builtins, and dsh-jobs is an abstract seam that refuses to
   // start without an implementation. "local" here means in-process, not on-disk.
   [/^dsh-agent-presets$/, 'needs the `loader` service (cordis-plugin-loader), which a statically expanded tree does not use. Nothing injects what it provides'],
-  [/^dsh-session-reference$/, 'needs `sessionQuery`, which is out of scope (design 5.3). Nothing injects what it provides'],
+  // The reason here used to be "needs sessionQuery, which is out of scope",
+  // and sessionQuery has since been filled by cf-session-query-do. What keeps
+  // this out now is the other half of the old line: nothing in this deployment
+  // injects it. Upstream 0.1.0-rc.8 changed that -- `dsh-client-ui-reference`
+  // is the `@` menu that references files and past sessions, and it wants this
+  // and `dsh-file-reference` behind it. Turning that on is a feature decision
+  // with a client-roster half, not part of following the version.
+  [/^dsh-session-reference$|^dsh-file-reference$/, 'the `@` reference menu (rc.8); its client half is not in the roster, so nothing injects these'],
   [/hmr/, 'hot reload; not needed in production'],
   [/^dsh-typert-loader$/, 'resolves typert contracts from disk at runtime; we reference them statically'],
   [/^dsh-home-paths$|^dsh-atomic-write$|^dsh-anonymous-user-id$|^dsh-launch-environment$/, 'host-machine paths and identity; no cloud equivalent'],
@@ -63,7 +70,20 @@ const EXCLUDE = [
   // `subprocess` seam, which is what dsh-terminal-bash needs to give it a PTY.
   [/^dsh-tool-pwsh|^dsh-tool-ralph|^dsh-tool-cordis|^dsh-tool-workflow/, 'needs an OS shell or a plugin host we do not provide'],
   // dsh-tool-fs is installed: cf-exec-provider/fs now fills the `fs` seam.
-  [/^dsh-tool-fs-search$|^dsh-tool-str-replace-editor$/, 'not published upstream at this version'],
+  // Both of these ARE published as of 0.1.0-rc.8 -- the old reason here said
+  // they were not, which stopped being true without anything noticing. They
+  // stay out for two different real reasons, so they get two rules.
+  //
+  // fs-search shells out: `ctx.subprocess.spawn` (which cf-exec-provider
+  // refuses -- there is no honest synchronous process handle across a service
+  // binding) and a `@vscode/ripgrep` dependency that downloads a native binary
+  // at install time. The agent already greps through `bash`.
+  [/^dsh-tool-fs-search$/, 'needs subprocess.spawn (unimplementable across a service binding) and a native ripgrep binary'],
+  // str-replace-editor needs only `ctx.fs`, which cf-exec-provider fills, so
+  // this one is a choice rather than a limit: it is a SECOND editing interface
+  // over the same filesystem as the read/write/edit trio dsh-tool-fs already
+  // registers. Offering the model both is surface without capability.
+  [/^dsh-tool-str-replace-editor$/, 'installable, deliberately not installed: a second editor interface over the read/write/edit trio'],
   [/^dsh-persona$/, 'not installed yet; M1 uses the default'],
 
   // --- The following were discovered by M0 measurement; the design doc's
