@@ -28,6 +28,7 @@
 import { readFileSync, writeFileSync, mkdirSync, cpSync, existsSync, readdirSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join, dirname } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 // Resolve from every workspace that installs upstream packages. The browser
 // plugins are split across two: the dsh-client-* set is declared by U1, and the
@@ -42,6 +43,21 @@ function resolvePkg(name) {
   }
   return undefined
 }
+
+/** The importable entry point of an upstream package, from the same bases. */
+function resolveEntry(name) {
+  for (const req of BASES) {
+    try { return req.resolve(name) } catch { /* try the next */ }
+  }
+  throw new Error(`${name} is not installed in any workspace that build-client resolves from`)
+}
+
+/**
+ * The bundles upstream's boot fragment turns into blocking classic scripts,
+ * mirrored here only so the assertion below can name them. Upstream keeps the
+ * list private; the assertion is what notices if it stops matching.
+ */
+const PARSER_PRELOADED = ['@deepseek-ai/dsh-client-modules', '@deepseek-ai/dsh-client-runtime']
 const PUBLIC = './units/edge/public'
 const CLIENT_DIR = join(PUBLIC, 'client')
 
@@ -49,7 +65,17 @@ const CLIENT_DIR = join(PUBLIC, 'client')
 // each exclusion is a reason, not a preference.
 const EXCLUDE = new Map([
   ['@deepseek-ai/dsh-client-hmr', 'hot module replacement; a dev-server feature with no server to talk to'],
-  ['@deepseek-ai/dsh-client-modules', 'the loader itself, already inside the shell bundle'],
+  // dsh-client-modules used to be excluded here as "the loader itself, already
+  // inside the shell bundle". That was true at 0.1.0-rc.6 and false at rc.8,
+  // and the difference took the whole page down.
+  //
+  // rc.8 lifted the module loader OUT of the shell. The shell now reads
+  // `globalThis.__ModuleLoader__` and throws "web boot: window.__ModuleLoader__
+  // bootstrap facade is missing" when nothing installed it; the host installs a
+  // queue-mode facade inline and parser-preloads this package's client bundle,
+  // which supplies the real implementation. So it is a graph entry now -- the
+  // injected preload tag resolves its URL out of `graph.entries`, and an
+  // excluded package has no URL to resolve.
   ['@deepseek-ai/dsh-client-web', 'the shell; it is the page, not an entry in its own graph'],
   // dsh-client-web-react and dsh-client-schema-form used to be excluded here as
   // shell internals. They stopped existing at 0.1.0-rc.8: upstream's
@@ -146,6 +172,52 @@ const manifest = { rev, entries }
 
 mkdirSync('./units/edge/build', { recursive: true })
 writeFileSync('./units/edge/build/boot-manifest.json', JSON.stringify(manifest, null, 2))
+
+// The head fragment U1 injects, produced by UPSTREAM's own function.
+//
+// The boot protocol is not just the manifest. Since 0.1.0-rc.8 it is three
+// things in one order: an inline queue-mode `window.__ModuleLoader__`, blocking
+// classic scripts for the two bundles the parser must execute before the shell
+// (dsh-client-modules, dsh-client-runtime), and only then the graph. The shell
+// throws on the first one missing.
+//
+// This repository had a hand-written copy of that protocol -- one line
+// injecting `__DSH_BOOT__` -- which was the whole protocol at rc.6 and a third
+// of it at rc.8. Following the version broke the page, and it broke in the
+// browser, where none of the boot checks here or in the agent Worker look.
+//
+// So the fragment is generated rather than written: `injectBootManifest` is
+// exported from dsh-client-modules for exactly this, it runs at build time
+// where its node: imports are ordinary, and the next protocol change arrives as
+// a diff in this file rather than as a blank page.
+// Resolved through the same workspace bases as every other upstream package: a
+// bare import here would look in the repository root, which installs esbuild
+// and wrangler and no upstream at all.
+const { injectBootManifest } = await import(pathToFileURL(resolveEntry('@deepseek-ai/dsh-client-modules')).href)
+const SENTINEL = '<!doctype html><html><head></head><body></body></html>'
+const injected = injectBootManifest(SENTINEL, manifest)
+const opened = injected.indexOf('<head>') + '<head>'.length
+const closed = injected.indexOf('</head>')
+const bootHead = injected.slice(opened, closed)
+
+// Assert the shape rather than trust the slice. If upstream stops injecting
+// into <head>, or drops a piece, this is a build failure -- which is the whole
+// point of generating it. A silently empty fragment would deploy a blank page
+// exactly like the one this replaced.
+const required = [
+  ['the module-loader facade', '__ModuleLoader__'],
+  ['the boot graph', '__DSH_BOOT__'],
+  ...PARSER_PRELOADED.map((id) => [`a preload tag for ${id}`, `src="/client/${id.replace('@deepseek-ai/', '')}.js"`]),
+]
+const missing = required.filter(([, needle]) => !bootHead.includes(needle)).map(([what]) => what)
+if (missing.length) {
+  throw new Error([
+    'the injected boot head is missing ' + missing.join(', ') + '.',
+    'upstream injectBootManifest produced:',
+    bootHead.slice(0, 400),
+  ].join('\n  '))
+}
+writeFileSync('./units/edge/build/boot-head.json', JSON.stringify({ html: bootHead }, null, 2))
 
 // Every injected id must be satisfied by something, or the loader waits on a
 // plugin that is never coming and the page stays blank with nothing to read.

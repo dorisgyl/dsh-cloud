@@ -9,7 +9,7 @@
 // removes the entire CORS and cross-origin WebSocket problem rather than
 // configuring around it.
 import { identify, isConfigured, sessionObjectName } from '../../../packages/cf-identity/src/index.mjs'
-import BOOT_MANIFEST from '../build/boot-manifest.json'
+import BOOT_HEAD from '../build/boot-head.json'
 
 const API_PREFIX = '/api'
 
@@ -157,7 +157,15 @@ function isIndexHtml(response) {
 }
 
 /**
- * Inject the boot manifest, and fix the one link that Access breaks.
+ * Inject the boot protocol, and fix the one link that Access breaks.
+ *
+ * The fragment is generated at build time by upstream's own
+ * `injectBootManifest` (see scripts/build-client.mjs) rather than written here.
+ * It used to be written here, as one script tag setting `window.__DSH_BOOT__`,
+ * and that was the entire protocol until upstream 0.1.0-rc.8 -- which lifted
+ * the module loader out of the shell and made the boot protocol three ordered
+ * pieces. The page went blank on "window.__ModuleLoader__ bootstrap facade is
+ * missing" and no check in this repository was looking at a browser.
  *
  * `<link rel="manifest">` is fetched WITHOUT credentials by default, so the
  * cookie Access set never goes with it; Access then redirects the request to its
@@ -170,10 +178,7 @@ function withBootManifest(response) {
   return new HTMLRewriter()
     .on('head', {
       element(head) {
-        head.prepend(
-          `<script>window.__DSH_BOOT__ = ${JSON.stringify(BOOT_MANIFEST).replaceAll('<', '\\u003c')}</script>`,
-          { html: true },
-        )
+        head.prepend(BOOT_HEAD.html, { html: true })
       },
     })
     .on('link[rel="manifest"]', {
