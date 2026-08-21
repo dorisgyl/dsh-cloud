@@ -6,6 +6,6 @@
   "description": "Session log persistence over Durable Object SQLite.",
   "exports": { ".": "./src/index.mjs" },
   "dependencies": {
-    "@deepseek-ai/dsh-session-persistence": "0.1.0-rc.6"
+    "@deepseek-ai/dsh-session-persistence": "0.1.0-rc.8"
   }
 }

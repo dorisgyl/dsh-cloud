@@ -8,6 +8,6 @@
     ".": "./src/index.mjs"
   },
   "dependencies": {
-    "@deepseek-ai/cordis-plugin-loader": "1.0.2-rc.4"
+    "@deepseek-ai/cordis-plugin-loader": "1.0.2"
   }
 }

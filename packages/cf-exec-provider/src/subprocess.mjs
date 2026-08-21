@@ -18,7 +18,13 @@
 //   from the container  binary        PTY output bytes
 //                       JSON text     { type: 'ready' | 'error' | 'exit', ... }
 import { Readable } from 'node:stream'
-import { SubprocessService } from '@deepseek-ai/dsh-subprocess'
+// `SubprocessRuntime` was `SubprocessService` on the abandoned 0.0.1 line of
+// this package, which is where this file was pinned while U2 installed 0.1.0 —
+// two copies of one seam, and this provider subclassing the copy nothing else
+// imported. Cordis registers by service NAME, so it worked; it worked the way
+// an unnoticed second copy works. The abstract surface is identical across the
+// rename: resolveExecutable, spawn, spawnTerminal, all registering `subprocess`.
+import { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 
 /** Ctrl-C. Over a PTY an interrupt IS a keystroke, not a kill(2). */
 const CONTROL_CHARS = {
@@ -27,7 +33,7 @@ const CONTROL_CHARS = {
   SIGQUIT: '\x1c',
 }
 
-export class CfSubprocessService extends SubprocessService {
+export class CfSubprocessService extends SubprocessRuntime {
   constructor(ctx, config) {
     super(ctx)
     if (!config?.exec) throw new Error('cf-exec-provider/subprocess requires the EXEC service binding (config.exec)')

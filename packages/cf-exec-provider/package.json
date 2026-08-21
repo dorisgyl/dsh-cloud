@@ -10,8 +10,8 @@
     "./subprocess": "./src/subprocess.mjs"
   },
   "dependencies": {
-    "@deepseek-ai/dsh-shell": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-fs": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-subprocess": "0.0.1-rc.1"
+    "@deepseek-ai/dsh-shell": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-fs": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-subprocess": "0.1.0-rc.8"
   }
 }

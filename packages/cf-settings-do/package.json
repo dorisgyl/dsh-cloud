@@ -5,5 +5,5 @@
   "type": "module",
   "description": "Upstream settings provider over Durable Object SQLite.",
   "exports": { ".": "./src/index.mjs" },
-  "dependencies": { "@deepseek-ai/dsh-settings": "0.1.0-rc.6" }
+  "dependencies": { "@deepseek-ai/dsh-settings": "0.1.0-rc.8" }
 }
