@@ -113,7 +113,7 @@ window.__ModuleLoader__.load({
 				};
 			}
 			/**
-			* Install the shell's renderer (web-react's createSlotRenderer product).
+			* Install the shell's renderer (ui-renderer's createSlotRenderer product).
 			* Boot-once: a second install throws. Runs through the caller's ctx.effect,
 			* so shell fiber unload uninstalls the renderer.
 			* @param renderer - the outlet machinery implementing SlotRenderer.
@@ -4617,11 +4617,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				details: object({ ns: string() })
 			}),
 			object({
-				code: literal("settings-not-exposed"),
-				message: string(),
-				details: object({ ns: string() })
-			}),
-			object({
 				code: literal("settings-conflict"),
 				message: string(),
 				details: object({
@@ -5352,9 +5347,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		* shell over it: {@link defineStore} bakes an init/persist/actions literal
 		* into a {@link StoreHandle}, the registration-side store seat of slot
 		* terminals. Lives in the React-free runtime (the data layer owns its
-		* engine; web-react is shell-only React
+		* engine; ui-renderer is shell-only React
 		* glue): engine products are bare observables — subscribe/getSnapshot/
-		* update/set, NO selector hook. Hook synthesis is web-react's (the one
+		* update/set, NO selector hook. Hook synthesis is ui-renderer's (the one
 		* uSES bridge, cached per source at the binding site).
 		*/
 		/**
@@ -7198,7 +7193,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			* @param mode - queue appends after the current turn; steer interrupts it.
 			* @returns the prompt result (also mirrored into promptError on failure).
 			*/
-			async prompt(content, mode) {
+			async prompt(content, mode, signal) {
 				this.promptError = null;
 				this.lastAgentError = null;
 				this.promptAttempted = true;
@@ -7211,7 +7206,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						mode,
 						content,
 						clientTimeZone: resolvedClientTimeZone()
-					})).result;
+					}, signal)).result;
 					else if (this.address.mode === "one-shot") result = {
 						ok: false,
 						error: {
@@ -7236,7 +7231,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 								text: part.text
 							}] : []),
 							clientTimeZone: resolvedClientTimeZone()
-						})).result;
+						}, signal)).result;
 						result = routed.ok ? {
 							ok: true,
 							value: { accepted: true }
@@ -7368,7 +7363,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			* @returns the admission result, or the error branch on transport failure.
 			*/
 			async command(line) {
-				const result = await this.remote.commands.execute(this.sessionId, line);
+				const result = await this.remote.commands.execute(this.sessionId, line, []);
 				if (!result.ok) return result;
 				return {
 					ok: true,
@@ -10300,9 +10295,30 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		* @returns an absolute path when a workspace root is available, otherwise the original path.
 		*/
 		function resolveWorkspacePath(cwd, path) {
-			if (path.startsWith("/") || /^[A-Za-z]:[/\\]/.test(path) || path.startsWith("\\\\")) return path;
+			if (path.startsWith("/") || isWindowsStylePath(path)) return path;
 			if (cwd === void 0 || cwd === "") return path;
 			return `${cwd.replace(/[/\\]+$/, "")}/${path.replace(/^[/\\]+/, "")}`;
+		}
+		/** Drive-letter or UNC path; Web display must not rewrite these as `~`. */
+		function isWindowsStylePath(value) {
+			return /^[A-Za-z]:[/\\]/.test(value) || value.startsWith("\\\\");
+		}
+		/**
+		* Display-only POSIX home abbreviation. Windows drive and UNC paths stay
+		* verbatim, including when `home` itself is a Windows path. A missing, empty,
+		* or filesystem-root `home` leaves `path` unchanged so `/` cannot become `~`.
+		* @param path - absolute or already-short display path.
+		* @param home - host account home from `host.describe`; absent skips abbreviation.
+		* @returns `~` or `~/…` for the POSIX home and its descendants, otherwise `path`.
+		*/
+		function abbreviateHomePath(path, home) {
+			if (home === void 0 || home === "") return path;
+			if (isWindowsStylePath(path) || isWindowsStylePath(home)) return path;
+			const root = home.replace(/\/+$/, "");
+			if (root === "" || root === "/") return path;
+			if (path.replace(/\/+$/, "") === root) return "~";
+			if (path.startsWith(`${root}/`)) return `~${path.slice(root.length)}`;
+			return path;
 		}
 		//#endregion
 		//#region lib/types/client/sessions/partial.js
@@ -10377,6 +10393,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		/** A collected name list rendered as one label; null when the list is empty. */
 		function joined(names) {
 			return names.length > 0 ? names.join(", ") : null;
+		}
+		/**
+		* The referenced-session labels of one durable `session-reference` recall
+		* source, in first-seen order; empty for every other source shape, including
+		* a foreign or older log whose reference entries carry no readable label.
+		* @param source - the logged `user/message` source, exactly as recorded.
+		* @returns distinct non-empty reference labels.
+		*/
+		function sessionRecallLabels(source) {
+			const record = asRecord(source);
+			if (record === null || readString(record, "kind") !== "session-reference") return [];
+			return collect(record, "references", "label");
 		}
 		/**
 		* Project one durable message source onto its transcript role and producer name.
@@ -10517,6 +10545,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		exports.SlotRegistry = SlotRegistry;
 		exports.WorkspaceCreateError = WorkspaceCreateError;
 		exports.WorkspaceRuntime = WorkspaceRuntime;
+		exports.abbreviateHomePath = abbreviateHomePath;
 		exports.apply = apply;
 		exports.contextForm = contextForm;
 		exports.contextProvenance = contextProvenance;
@@ -10533,6 +10562,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		exports.isTokenDelta = isTokenDelta;
 		exports.resolveWorkspacePath = resolveWorkspacePath;
 		exports.scopeOf = scopeOf;
+		exports.sessionRecallLabels = sessionRecallLabels;
 		exports.shallowEqual = shallowEqual;
 		exports.toAssistantBlock = toAssistantBlock;
 		exports.toAssistantBlocks = toAssistantBlocks;

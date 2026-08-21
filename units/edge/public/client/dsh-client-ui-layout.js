@@ -63,12 +63,12 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var AppFrame_module_css_default = {
+			"centerCol": "pI_x6G_centerCol",
 			"detailsCol": "pI_x6G_detailsCol",
-			"sidebarCol": "pI_x6G_sidebarCol",
-			"overlayLayer": "pI_x6G_overlayLayer",
-			"handle": "pI_x6G_handle",
 			"frame": "pI_x6G_frame",
-			"centerCol": "pI_x6G_centerCol"
+			"handle": "pI_x6G_handle",
+			"overlayLayer": "pI_x6G_overlayLayer",
+			"sidebarCol": "pI_x6G_sidebarCol"
 		};
 		//#endregion
 		//#region lib/types/client/AppFrame.js

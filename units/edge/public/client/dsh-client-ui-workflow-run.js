@@ -19,28 +19,28 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var WorkflowRunPanel_module_css_default = {
-			"root": "DBuyfa_root",
-			"phaseHeader": "DBuyfa_phaseHeader",
-			"runTitle": "DBuyfa_runTitle",
-			"memberLabel": "DBuyfa_memberLabel",
-			"phaseList": "DBuyfa_phaseList",
-			"phaseLeading": "DBuyfa_phaseLeading",
-			"phase": "DBuyfa_phase",
-			"members": "DBuyfa_members",
-			"phaseStatus": "DBuyfa_phaseStatus",
-			"runHeader": "DBuyfa_runHeader",
-			"memberRow": "DBuyfa_memberRow",
-			"memberStatus": "DBuyfa_memberStatus",
-			"statusTail": "DBuyfa_statusTail",
 			"dotSlot": "DBuyfa_dotSlot",
 			"empty": "DBuyfa_empty",
 			"memberButton": "DBuyfa_memberButton",
+			"memberLabel": "DBuyfa_memberLabel",
 			"memberLabelWrap": "DBuyfa_memberLabelWrap",
+			"memberRow": "DBuyfa_memberRow",
+			"memberStatus": "DBuyfa_memberStatus",
+			"members": "DBuyfa_members",
+			"phase": "DBuyfa_phase",
+			"phaseCount": "DBuyfa_phaseCount",
+			"phaseHeader": "DBuyfa_phaseHeader",
+			"phaseLeading": "DBuyfa_phaseLeading",
+			"phaseList": "DBuyfa_phaseList",
+			"phaseStatus": "DBuyfa_phaseStatus",
+			"phaseTitle": "DBuyfa_phaseTitle",
+			"root": "DBuyfa_root",
+			"runHeader": "DBuyfa_runHeader",
 			"runLeading": "DBuyfa_runLeading",
 			"runSummary": "DBuyfa_runSummary",
+			"runTitle": "DBuyfa_runTitle",
 			"separator": "DBuyfa_separator",
-			"phaseTitle": "DBuyfa_phaseTitle",
-			"phaseCount": "DBuyfa_phaseCount"
+			"statusTail": "DBuyfa_statusTail"
 		};
 		//#endregion
 		//#region lib/types/client/WorkflowRunPanel.js
@@ -75,30 +75,85 @@ window.__ModuleLoader__.load({
 		function memberCount(count, t) {
 			return t(count === 1 ? "run.members.one" : "run.members.other", { count });
 		}
-		function phaseRequiresExpansion(phase) {
-			return phase.members.some((member) => member.status !== "completed");
-		}
-		/* v8 ignore next -- DisclosureRow requires the callback but cannot invoke it when expandable is false. */
-		const forcedOpenToggle = () => {};
-		function ManualDisclosure(props) {
-			const [open, setOpen] = (0, react.useState)(false);
+		function StatusDisclosure(props) {
 			return (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.DisclosureRow, {
 				...props,
-				open,
-				expandable: true,
-				onToggle: () => {
-					setOpen((value) => !value);
-				}
+				expandable: true
 			});
 		}
-		function StatusDisclosure({ cleanCycleKey, requiresExpansion, ...props }) {
-			if (!requiresExpansion) return (0, react_jsx_runtime.jsx)(ManualDisclosure, { ...props }, cleanCycleKey);
-			return (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.DisclosureRow, {
-				...props,
+		function abnormal(status) {
+			return status === "failed" || status === "cancelled" || status === "interrupted";
+		}
+		function phaseDisclosureFacts(phase) {
+			return {
+				mode: phase.members.some((member) => abnormal(member.status)) ? "abnormal" : phase.members.some((member) => member.status === "running") ? "running" : "clean",
+				activityCount: phase.members.length
+			};
+		}
+		function runDisclosureFacts(status, phases) {
+			return {
+				mode: abnormal(status) || phases.some(([, facts]) => facts.mode === "abnormal") ? "abnormal" : status === "running" || phases.some(([, facts]) => facts.mode === "running") ? "running" : "clean",
+				activityCount: phases.reduce((count, [, facts]) => count + facts.activityCount, 0)
+			};
+		}
+		function initialDisclosureState(facts) {
+			return {
+				...facts,
+				open: facts.mode !== "clean",
+				pendingCleanCollapse: false
+			};
+		}
+		function advanceDisclosureState(current, facts, focusWithin) {
+			if (current.mode === facts.mode && current.activityCount === facts.activityCount) {
+				if (!current.pendingCleanCollapse || focusWithin) return current;
+				return {
+					...current,
+					open: false,
+					pendingCleanCollapse: false
+				};
+			}
+			if (facts.mode === "clean") {
+				const deferCollapse = current.open && focusWithin;
+				return {
+					...facts,
+					open: deferCollapse,
+					pendingCleanCollapse: deferCollapse
+				};
+			}
+			if (current.mode === "clean" || facts.mode === "abnormal" && current.mode !== "abnormal") return {
+				...facts,
 				open: true,
-				expandable: false,
-				onToggle: forcedOpenToggle
-			});
+				pendingCleanCollapse: false
+			};
+			return {
+				...facts,
+				open: current.open,
+				pendingCleanCollapse: false
+			};
+		}
+		function focusIsWithin(element) {
+			if (element === null || element === void 0) return false;
+			return element.contains(element.ownerDocument.activeElement);
+		}
+		function collapsePending(state) {
+			if (!state.pendingCleanCollapse) return state;
+			return {
+				...state,
+				open: false,
+				pendingCleanCollapse: false
+			};
+		}
+		function existingPhaseState(phases, key) {
+			const phase = phases.get(key);
+			/* v8 ignore next -- mounted phase callbacks are created from this owner map. */
+			if (phase === void 0) throw new Error(`Missing disclosure state for phase ${key}`);
+			return phase;
+		}
+		function preventPendingHeaderFocus(event) {
+			const header = event.currentTarget.querySelector("[data-disclosure-row]");
+			/* v8 ignore next -- DisclosureRow always renders its header before the content. */
+			if (header === null) throw new Error("Missing disclosure header");
+			if (header.contains(event.target)) event.preventDefault();
 		}
 		function phaseStatusSummary(members, t) {
 			const counts = /* @__PURE__ */ new Map();
@@ -122,11 +177,12 @@ window.__ModuleLoader__.load({
 			}
 			return result;
 		}
-		function RunHeader({ children, count, name, requiresExpansion, status, t }) {
+		function RunHeader({ children, count, name, onToggle, open, status, t }) {
 			return (0, react_jsx_runtime.jsx)(StatusDisclosure, {
 				icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronRightOutline14, {}),
 				title: t("run.title", { name }),
-				requiresExpansion,
+				open,
+				onToggle,
 				expandOnRowClick: true,
 				previewChevron: false,
 				keepContentWhenOpen: true,
@@ -153,6 +209,8 @@ window.__ModuleLoader__.load({
 		}
 		function MemberRow({ member, navigable, openSession, t }) {
 			const name = readableMember(member.label, t);
+			const [focused, setFocused] = (0, react.useState)(false);
+			const renderButton = navigable || focused;
 			const content = (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
 				(0, react_jsx_runtime.jsx)("span", {
 					className: WorkflowRunPanel_module_css_default.dotSlot,
@@ -173,88 +231,205 @@ window.__ModuleLoader__.load({
 					children: t(STATUS_KEYS[member.status])
 				})
 			] });
-			if (!navigable) return (0, react_jsx_runtime.jsx)("div", {
+			if (!renderButton) return (0, react_jsx_runtime.jsx)("div", {
 				className: WorkflowRunPanel_module_css_default.memberRow,
 				"data-member-status": member.status,
 				children: content
 			});
 			return (0, react_jsx_runtime.jsx)("button", {
 				type: "button",
-				className: WorkflowRunPanel_module_css_default.memberButton,
+				className: navigable ? WorkflowRunPanel_module_css_default.memberButton : WorkflowRunPanel_module_css_default.memberRow,
 				"data-member-status": member.status,
-				"aria-label": t("member.open", { name }),
-				onClick: () => {
-					openSession(member.childId);
+				"aria-disabled": navigable ? void 0 : true,
+				"aria-label": navigable ? t("member.open", { name }) : name,
+				tabIndex: navigable ? void 0 : -1,
+				onFocus: () => {
+					setFocused(true);
 				},
+				onBlur: () => {
+					setFocused(false);
+				},
+				onClick: navigable ? () => {
+					openSession(member.childId);
+				} : void 0,
 				children: content
 			});
 		}
-		function PhaseSection({ phase, navigable, openSession, t }) {
-			return (0, react_jsx_runtime.jsx)(StatusDisclosure, {
-				icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronRightOutline14, {}),
-				title: readablePhase(phase.phase, t),
-				cleanCycleKey: phase.members.length,
-				requiresExpansion: phaseRequiresExpansion(phase),
-				expandOnRowClick: true,
-				previewChevron: false,
-				keepContentWhenOpen: true,
+		function PhaseSection({ contentRef, onContentBlur, onToggle, open, pendingCleanCollapse, phase, navigable, openSession, t }) {
+			return (0, react_jsx_runtime.jsx)("div", {
 				className: WorkflowRunPanel_module_css_default.phase,
-				rowClassName: WorkflowRunPanel_module_css_default.phaseHeader,
-				leadingClassName: WorkflowRunPanel_module_css_default.phaseLeading,
-				titleClassName: WorkflowRunPanel_module_css_default.phaseTitle,
-				collapsedContent: (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
-					(0, react_jsx_runtime.jsx)("span", {
-						className: WorkflowRunPanel_module_css_default.separator,
-						"aria-hidden": true
-					}),
-					(0, react_jsx_runtime.jsx)("span", {
-						className: WorkflowRunPanel_module_css_default.phaseCount,
-						"data-phase-count": true,
-						children: memberCount(phase.members.length, t)
-					}),
-					(0, react_jsx_runtime.jsx)("span", {
-						className: WorkflowRunPanel_module_css_default.phaseStatus,
-						"data-phase-status-text": true,
-						children: phaseStatusSummary(phase.members, t)
+				onMouseDownCapture: pendingCleanCollapse ? preventPendingHeaderFocus : void 0,
+				children: (0, react_jsx_runtime.jsx)(StatusDisclosure, {
+					icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronRightOutline14, {}),
+					title: readablePhase(phase.phase, t),
+					open,
+					onToggle,
+					expandOnRowClick: true,
+					previewChevron: false,
+					keepContentWhenOpen: true,
+					rowClassName: WorkflowRunPanel_module_css_default.phaseHeader,
+					leadingClassName: WorkflowRunPanel_module_css_default.phaseLeading,
+					titleClassName: WorkflowRunPanel_module_css_default.phaseTitle,
+					collapsedContent: (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+						(0, react_jsx_runtime.jsx)("span", {
+							className: WorkflowRunPanel_module_css_default.separator,
+							"aria-hidden": true
+						}),
+						(0, react_jsx_runtime.jsx)("span", {
+							className: WorkflowRunPanel_module_css_default.phaseCount,
+							"data-phase-count": true,
+							children: memberCount(phase.members.length, t)
+						}),
+						(0, react_jsx_runtime.jsx)("span", {
+							className: WorkflowRunPanel_module_css_default.phaseStatus,
+							"data-phase-status-text": true,
+							children: phaseStatusSummary(phase.members, t)
+						})
+					] }),
+					children: (0, react_jsx_runtime.jsx)("div", {
+						ref: contentRef,
+						className: WorkflowRunPanel_module_css_default.members,
+						onBlur: onContentBlur,
+						children: phase.members.map((member) => (0, react_jsx_runtime.jsx)(MemberRow, {
+							member,
+							navigable: navigable.includes(member.childId),
+							openSession,
+							t
+						}, member.seq))
 					})
-				] }),
-				children: (0, react_jsx_runtime.jsx)("div", {
-					className: WorkflowRunPanel_module_css_default.members,
-					children: phase.members.map((member) => (0, react_jsx_runtime.jsx)(MemberRow, {
-						member,
-						navigable: navigable.includes(member.childId),
-						openSession,
-						t
-					}, member.seq))
 				})
 			});
 		}
 		/** Render one durable workflow run with status-driven run and phase disclosure. */
 		function WorkflowRunPanel({ node, sessionId, useSessions, openSession, t }) {
-			const totalMembers = node.data.phases.reduce((count, phase) => count + phase.members.length, 0);
-			const requiresExpansion = node.data.status !== "completed" || node.data.phases.some(phaseRequiresExpansion);
+			const phaseFacts = (0, react.useMemo)(() => node.data.phases.map((phase) => [phase.key, phaseDisclosureFacts(phase)]), [node.data.phases]);
+			const runFacts = (0, react.useMemo)(() => runDisclosureFacts(node.data.status, phaseFacts), [node.data.status, phaseFacts]);
+			const totalMembers = runFacts.activityCount;
+			const [disclosures, setDisclosures] = (0, react.useState)(() => ({
+				run: initialDisclosureState(runFacts),
+				phases: new Map(phaseFacts.map(([key, facts]) => [key, initialDisclosureState(facts)]))
+			}));
+			const runContentRef = (0, react.useRef)(null);
+			const phaseContentRefs = (0, react.useRef)(/* @__PURE__ */ new Map());
 			const navigable = useSessions((sessions) => navigableMembers(sessions, node.data.phases, sessionId), _deepseek_ai_dsh_client_runtime_client.shallowEqual);
+			(0, react.useLayoutEffect)(() => {
+				setDisclosures((current) => {
+					const phases = /* @__PURE__ */ new Map();
+					let phasesChanged = current.phases.size !== phaseFacts.length;
+					let phaseStartedCycle = false;
+					for (const [key, facts] of phaseFacts) {
+						const previous = current.phases.get(key);
+						const next = previous === void 0 ? initialDisclosureState(facts) : advanceDisclosureState(previous, facts, focusIsWithin(phaseContentRefs.current.get(key)));
+						phases.set(key, next);
+						if (next !== previous) phasesChanged = true;
+						if (previous?.mode === "clean" && (facts.mode !== "clean" || facts.activityCount !== previous.activityCount)) phaseStartedCycle = true;
+					}
+					const advancedRun = advanceDisclosureState(current.run, runFacts, focusIsWithin(runContentRef.current));
+					const run = phaseStartedCycle && runFacts.mode !== "clean" && !advancedRun.open ? {
+						...advancedRun,
+						open: true,
+						pendingCleanCollapse: false
+					} : advancedRun;
+					return run !== current.run || phasesChanged ? {
+						run,
+						phases
+					} : current;
+				});
+			}, [
+				disclosures.run.open,
+				phaseFacts,
+				runFacts
+			]);
+			const toggleRun = () => {
+				setDisclosures((current) => ({
+					...current,
+					run: {
+						...current.run,
+						open: !current.run.open,
+						pendingCleanCollapse: false
+					}
+				}));
+			};
+			const togglePhase = (key) => {
+				setDisclosures((current) => {
+					const phases = new Map(current.phases);
+					const phase = existingPhaseState(phases, key);
+					phases.set(key, {
+						...phase,
+						open: !phase.open,
+						pendingCleanCollapse: false
+					});
+					return {
+						...current,
+						phases
+					};
+				});
+			};
+			const settleRunBlur = (event) => {
+				if (event.currentTarget.contains(event.relatedTarget)) return;
+				setDisclosures((current) => {
+					const run = collapsePending(current.run);
+					return run === current.run ? current : {
+						...current,
+						run
+					};
+				});
+			};
+			const settlePhaseBlur = (key, event) => {
+				if (event.currentTarget.contains(event.relatedTarget)) return;
+				setDisclosures((current) => {
+					const phase = existingPhaseState(current.phases, key);
+					const next = collapsePending(phase);
+					if (next === phase) return current;
+					const phases = new Map(current.phases);
+					phases.set(key, next);
+					return {
+						...current,
+						phases
+					};
+				});
+			};
 			return (0, react_jsx_runtime.jsx)("section", {
 				className: WorkflowRunPanel_module_css_default.root,
 				"data-workflow-run": true,
 				"data-run-status": node.data.status,
+				onMouseDownCapture: disclosures.run.pendingCleanCollapse ? preventPendingHeaderFocus : void 0,
 				children: (0, react_jsx_runtime.jsx)(RunHeader, {
 					count: totalMembers,
 					name: node.data.name,
-					requiresExpansion,
+					open: disclosures.run.open,
+					onToggle: toggleRun,
 					status: node.data.status,
 					t,
 					children: (0, react_jsx_runtime.jsx)("div", {
+						ref: runContentRef,
 						className: WorkflowRunPanel_module_css_default.phaseList,
+						onBlur: settleRunBlur,
 						children: node.data.phases.length === 0 ? (0, react_jsx_runtime.jsx)("span", {
 							className: WorkflowRunPanel_module_css_default.empty,
 							children: t("run.empty")
-						}) : node.data.phases.map((phase) => (0, react_jsx_runtime.jsx)(PhaseSection, {
-							phase,
-							navigable,
-							openSession,
-							t
-						}, phase.key))
+						}) : node.data.phases.map((phase) => {
+							const facts = phaseDisclosureFacts(phase);
+							const disclosure = disclosures.phases.get(phase.key) ?? initialDisclosureState(facts);
+							return (0, react_jsx_runtime.jsx)(PhaseSection, {
+								contentRef: (element) => {
+									if (element === null) phaseContentRefs.current.delete(phase.key);
+									else phaseContentRefs.current.set(phase.key, element);
+								},
+								onContentBlur: (event) => {
+									settlePhaseBlur(phase.key, event);
+								},
+								onToggle: () => {
+									togglePhase(phase.key);
+								},
+								open: disclosure.open,
+								pendingCleanCollapse: disclosure.pendingCleanCollapse,
+								phase,
+								navigable,
+								openSession,
+								t
+							}, phase.key);
+						})
 					})
 				})
 			});

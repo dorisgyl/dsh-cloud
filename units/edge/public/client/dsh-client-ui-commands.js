@@ -500,12 +500,17 @@ window.__ModuleLoader__.load({
 				decorations: /* @__PURE__ */ new Map(),
 				popups: /* @__PURE__ */ new Map()
 			};
+			/** `command`-namespace translator (composer refusal notices). */
+			t;
 			/**
 			* @param ctx - owning root context (plugin fiber; the service registers
 			* itself as `command` and follows that fiber's lifetime).
 			*/
 			constructor(ctx) {
 				super(ctx, "commandUi");
+				const locale = ctx.get("locale");
+				if (locale === void 0) throw new Error("ui-commands: locale service unavailable");
+				this.t = locale.bind("command");
 				this.directory = new CommandDirectory(async (sessionId) => {
 					if (this.sessions().subagentAddress(sessionId) !== void 0) return [];
 					const result = await ctx.remote.commands.list(sessionId);
@@ -520,7 +525,7 @@ window.__ModuleLoader__.load({
 					candidates: (session, req) => this.candidates(session, req),
 					onPick: (pick) => this.dispatch(pick),
 					matchSpace: (session, token) => this.matchSpace(session, token),
-					matchEnter: (session, line, signal) => this.matchEnter(session, line, signal),
+					matchEnter: (session, line, signal, envelope) => this.matchEnter(session, line, signal, envelope),
 					warm: (session) => {
 						this.directory.warm(session.sessionId);
 					}
@@ -687,8 +692,14 @@ window.__ModuleLoader__.load({
 			* warmup failure rejects — never a silent downgrade). Contributions and
 			* bare host commands act on the bare token only; leadingInput claims
 			* args-tolerant.
+			*
+			* Envelope policy: an enter submission carrying images resolves only
+			* through a command declaring image acceptance. Every other command route —
+			* popup, non-accepting claim, bare detached execute — throws the refusal
+			* so the machine surfaces one composer notice and the draft and images
+			* stay in place; nothing executes and nothing is dropped.
 			*/
-			async matchEnter(session, line, signal) {
+			async matchEnter(session, line, signal, envelope) {
 				const trimmed = line.trim();
 				if (!trimmed.startsWith("/")) return void 0;
 				const ws = trimmed.search(/\s/);
@@ -696,9 +707,13 @@ window.__ModuleLoader__.load({
 				const bare = ws === -1;
 				const name = token.slice(1);
 				if (name === "") return void 0;
+				const refuseImages = () => {
+					throw new Error(this.t("notice.imagesUnsupported", { command: name }));
+				};
 				const contribution = this.live.contributions.get(name);
 				if (contribution !== void 0 && contribution.available(session)) {
 					if (!bare) return void 0;
+					if (envelope.images > 0) refuseImages();
 					this.openPopup(name, contribution.ui, session, {
 						via: "enter",
 						token
@@ -711,6 +726,7 @@ window.__ModuleLoader__.load({
 				if (bare) {
 					const decoration = this.live.decorations.get(name);
 					if (decoration !== void 0 && decoration.available(session)) {
+						if (envelope.images > 0) refuseImages();
 						this.openPopup(name, decoration.ui, session, {
 							via: "enter",
 							token
@@ -718,8 +734,12 @@ window.__ModuleLoader__.load({
 						return "handled";
 					}
 				}
-				if (desc.input !== void 0) return { claim: this.leadingClaim(desc, session) };
+				if (desc.input !== void 0) {
+					if (envelope.images > 0 && desc.input.images !== true) refuseImages();
+					return { claim: this.leadingClaim(desc, session) };
+				}
 				if (!bare) return void 0;
+				if (envelope.images > 0) refuseImages();
 				this.consumeVia(session.sessionId, {
 					via: "enter",
 					token
@@ -739,7 +759,8 @@ window.__ModuleLoader__.load({
 				return {
 					token,
 					...desc.input !== void 0 ? { hint: desc.input.hint } : {},
-					submit: (args, _actx) => this.execute(session, token + args)
+					...desc.input?.images === true ? { images: true } : {},
+					submit: (args, _actx, images) => this.execute(session, token + args, images)
 				};
 			}
 			/**
@@ -749,16 +770,22 @@ window.__ModuleLoader__.load({
 			* plain success regardless of its handler outcome, because the host
 			* executor durably logged the lifecycle (`command/run`/`command/done`) and
 			* the outcome renders as a persistent flow node — the composer never
-			* echoes it. Transport failures throw.
+			* echoes it. A handler error result reports an error outcome so the
+			* composer keeps the submission (draft and images) for correction.
+			* Transport failures throw.
 			*/
-			async execute(session, line) {
-				const result = await this.ctx.remote.commands.execute(session.sessionId, line);
+			async execute(session, line, images = []) {
+				const result = await this.ctx.remote.commands.execute(session.sessionId, line, images);
 				if (!result.ok) throw new Error(`command.execute failed: ${result.error.code}: ${result.error.message}`);
 				if (result.value === void 0) return {
 					kind: "error",
 					text: `unknown or malformed command: ${line}`
 				};
 				this.notifyExecuted(session.sessionId, submittedCommandName(line), result.value.result);
+				if (images.length > 0 && result.value.result.kind === "error") return {
+					kind: "error",
+					text: result.value.result.text
+				};
 				return { kind: "success" };
 			}
 			/** Publish the local acknowledgment without letting an observer change command admission. */
@@ -855,18 +882,18 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var PopupSelectView_module_css_default = {
-			"errorText": "mufS8W_errorText",
-			"status": "mufS8W_status",
-			"search": "mufS8W_search",
-			"row": "mufS8W_row",
-			"error": "mufS8W_error",
-			"check": "mufS8W_check",
 			"card": "mufS8W_card",
-			"viewport": "mufS8W_viewport",
-			"retry": "mufS8W_retry",
-			"rowActive": "mufS8W_rowActive",
+			"check": "mufS8W_check",
+			"detail": "mufS8W_detail",
+			"error": "mufS8W_error",
+			"errorText": "mufS8W_errorText",
 			"label": "mufS8W_label",
-			"detail": "mufS8W_detail"
+			"retry": "mufS8W_retry",
+			"row": "mufS8W_row",
+			"rowActive": "mufS8W_rowActive",
+			"search": "mufS8W_search",
+			"status": "mufS8W_status",
+			"viewport": "mufS8W_viewport"
 		};
 		//#endregion
 		//#region lib/types/client/PopupSelectView.js
@@ -1047,7 +1074,8 @@ window.__ModuleLoader__.load({
 			"status.applying": "正在应用…",
 			"status.empty": "无选项",
 			"overlay.aria": "/{command} 选项",
-			"listbox.aria": "/{command} 匹配项"
+			"listbox.aria": "/{command} 匹配项",
+			"notice.imagesUnsupported": "/{command} 不接受图片附件，请先移除图片"
 		};
 		/** English dictionary, checked complete against the zh key set. */
 		const en = {
@@ -1057,7 +1085,8 @@ window.__ModuleLoader__.load({
 			"status.applying": "Applying…",
 			"status.empty": "No options",
 			"overlay.aria": "/{command} options",
-			"listbox.aria": "/{command} matches"
+			"listbox.aria": "/{command} matches",
+			"notice.imagesUnsupported": "/{command} does not accept image attachments; remove them first"
 		};
 		//#endregion
 		//#region lib/types/client/index.js

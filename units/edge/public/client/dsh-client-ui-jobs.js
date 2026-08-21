@@ -18,19 +18,19 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var JobListAction_module_css_default = {
-			"triggerDot": "QsffPG_triggerDot",
-			"kind": "QsffPG_kind",
-			"trigger": "QsffPG_trigger",
-			"menu": "QsffPG_menu",
-			"triggerOpen": "QsffPG_triggerOpen",
-			"rowSettled": "QsffPG_rowSettled",
-			"label": "QsffPG_label",
-			"status": "QsffPG_status",
+			"count": "QsffPG_count",
 			"duration": "QsffPG_duration",
-			"rowDot": "QsffPG_rowDot",
+			"kind": "QsffPG_kind",
+			"label": "QsffPG_label",
+			"menu": "QsffPG_menu",
 			"root": "QsffPG_root",
 			"row": "QsffPG_row",
-			"count": "QsffPG_count"
+			"rowDot": "QsffPG_rowDot",
+			"rowSettled": "QsffPG_rowSettled",
+			"status": "QsffPG_status",
+			"trigger": "QsffPG_trigger",
+			"triggerDot": "QsffPG_triggerDot",
+			"triggerOpen": "QsffPG_triggerOpen"
 		};
 		//#endregion
 		//#region lib/types/client/JobListAction.js
@@ -122,16 +122,7 @@ window.__ModuleLoader__.load({
 			const triggerRef = (0, react.useRef)(null);
 			const rows = (0, react.useMemo)(() => ordered(jobs), [jobs]);
 			const liveCount = (0, react.useMemo)(() => jobs.filter(isLive).length, [jobs]);
-			(0, react.useEffect)(() => {
-				if (!open) return;
-				const closeOutside = (event) => {
-					if (event.target instanceof Node && !rootRef.current?.contains(event.target)) setOpen(false);
-				};
-				document.addEventListener("pointerdown", closeOutside);
-				return () => {
-					document.removeEventListener("pointerdown", closeOutside);
-				};
-			}, [open]);
+			(0, _deepseek_ai_dsh_client_ui_primitives.useDismissOnOutsidePointer)(rootRef, open, setOpen);
 			(0, react.useEffect)(() => {
 				if (!open || liveCount === 0) return;
 				setNow(Date.now());

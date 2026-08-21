@@ -167,14 +167,14 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var ProducedFiles_module_css_default = {
-			"showFolder": "P4kPIW_showFolder",
 			"file": "P4kPIW_file",
-			"root": "P4kPIW_root",
-			"measure": "P4kPIW_measure",
 			"label": "P4kPIW_label",
+			"measure": "P4kPIW_measure",
+			"more": "P4kPIW_more",
 			"probe": "P4kPIW_probe",
+			"root": "P4kPIW_root",
 			"row": "P4kPIW_row",
-			"more": "P4kPIW_more"
+			"showFolder": "P4kPIW_showFolder"
 		};
 		//#endregion
 		//#region lib/types/client/ProducedFiles.js

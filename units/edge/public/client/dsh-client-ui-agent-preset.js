@@ -26,7 +26,7 @@ window.__ModuleLoader__.load({
 			view: "View",
 			presetStandardName: "Standard mode",
 			presetStandardDescription: "Full coding agent with file editing, shell, file and web search, skills, planning, goals, subagents, and workflows.",
-			presetCodeName: "Code mode",
+			presetCodeName: "PTC mode",
 			presetCodeDescription: "All Standard mode capabilities, with tools exposed through the Code Mode SDK so the model can combine multi-step operations in one TypeScript program.",
 			presetMinimalName: "Minimal mode",
 			presetMinimalDescription: "Two-tool coding agent with persistent bash and str_replace_editor.",
@@ -268,12 +268,12 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var AgentPresetRow_module_css_default = {
-			"row": "_5QVD0a_row",
-			"title": "_5QVD0a_title",
-			"rowText": "_5QVD0a_rowText",
-			"desc": "_5QVD0a_desc",
 			"chevron": "_5QVD0a_chevron",
-			"selector": "_5QVD0a_selector"
+			"desc": "_5QVD0a_desc",
+			"row": "_5QVD0a_row",
+			"rowText": "_5QVD0a_rowText",
+			"selector": "_5QVD0a_selector",
+			"title": "_5QVD0a_title"
 		};
 		//#endregion
 		//#region lib/types/client/AgentPresetRow.js
@@ -343,17 +343,17 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var AgentPresetSeat_module_css_default = {
-			"introChar": "cubgiG_introChar",
 			"chevron": "cubgiG_chevron",
-			"seat": "cubgiG_seat",
-			"seat-icon-in": "cubgiG_seat-icon-in",
-			"item": "cubgiG_item",
-			"seat-char-in": "cubgiG_seat-char-in",
+			"introChar": "cubgiG_introChar",
 			"introIcon": "cubgiG_introIcon",
-			"itemDesc": "cubgiG_itemDesc",
-			"seatIcon": "cubgiG_seatIcon",
 			"introText": "cubgiG_introText",
-			"itemName": "cubgiG_itemName"
+			"item": "cubgiG_item",
+			"itemDesc": "cubgiG_itemDesc",
+			"itemName": "cubgiG_itemName",
+			"seat": "cubgiG_seat",
+			"seat-char-in": "cubgiG_seat-char-in",
+			"seat-icon-in": "cubgiG_seat-icon-in",
+			"seatIcon": "cubgiG_seatIcon"
 		};
 		//#endregion
 		//#region lib/types/client/AgentPresetSeat.js
@@ -607,10 +607,16 @@ window.__ModuleLoader__.load({
 		/** Reads the roster and persists the chosen default. */
 		var AgentPresetSettingsController = class {
 			api;
+			describeFace;
 			/** Row snapshot the renderer subscribes to. */
 			store = (0, _deepseek_ai_dsh_client_runtime_client.createSnapshotStore)(INITIAL$2);
-			constructor(api) {
+			/**
+			* @param api - the agent-preset and settings wire faces (roster and default write).
+			* @param describeFace - the shared mirror's describe face (writability source).
+			*/
+			constructor(api, describeFace) {
 				this.api = api;
+				this.describeFace = describeFace;
 			}
 			set(patch) {
 				this.store.set({
@@ -637,21 +643,14 @@ window.__ModuleLoader__.load({
 					});
 					return;
 				}
-				try {
-					const described = await this.api.settings.describe({});
-					this.set({
-						status: "ready",
-						error: null,
-						writable: described.result.ok && described.result.value.writable,
-						options: presetOptions(presets),
-						currentValue: presets.find((preset) => preset.isDefault)?.id ?? first.id
-					});
-				} catch (error) {
-					this.set({
-						status: "error",
-						error: messageOf(error)
-					});
-				}
+				await this.describeFace.ensure();
+				this.set({
+					status: "ready",
+					error: null,
+					writable: this.describeFace.getSnapshot().view?.writable ?? false,
+					options: presetOptions(presets),
+					currentValue: presets.find((preset) => preset.isDefault)?.id ?? first.id
+				});
 			}
 			/**
 			* Persist one preset as the default for sessions created later. Running
@@ -984,40 +983,40 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var AgentPresetSection_module_css_default = {
-			"cardMain": "rtSEdW_cardMain",
-			"field": "rtSEdW_field",
-			"cardDesc": "rtSEdW_cardDesc",
-			"dialog": "rtSEdW_dialog",
-			"cardActive": "rtSEdW_cardActive",
-			"title": "rtSEdW_title",
-			"group": "rtSEdW_group",
-			"cards": "rtSEdW_cards",
-			"viewerCode": "rtSEdW_viewerCode",
-			"deleteConfirm": "rtSEdW_deleteConfirm",
-			"inUse": "rtSEdW_inUse",
-			"cardId": "rtSEdW_cardId",
-			"revealedPathLabel": "rtSEdW_revealedPathLabel",
-			"deleteDialog": "rtSEdW_deleteDialog",
-			"cardHead": "rtSEdW_cardHead",
-			"secondaryButton": "rtSEdW_secondaryButton",
-			"card": "rtSEdW_card",
-			"brokenBadge": "rtSEdW_brokenBadge",
-			"cardBrokenReason": "rtSEdW_cardBrokenReason",
-			"iconDanger": "rtSEdW_iconDanger",
-			"cardName": "rtSEdW_cardName",
-			"iconButton": "rtSEdW_iconButton",
-			"fieldLabel": "rtSEdW_fieldLabel",
-			"input": "rtSEdW_input",
-			"error": "rtSEdW_error",
 			"badge": "rtSEdW_badge",
+			"brokenBadge": "rtSEdW_brokenBadge",
+			"card": "rtSEdW_card",
+			"cardActive": "rtSEdW_cardActive",
 			"cardBroken": "rtSEdW_cardBroken",
-			"intro": "rtSEdW_intro",
+			"cardBrokenReason": "rtSEdW_cardBrokenReason",
+			"cardDesc": "rtSEdW_cardDesc",
 			"cardFoot": "rtSEdW_cardFoot",
+			"cardHead": "rtSEdW_cardHead",
+			"cardId": "rtSEdW_cardId",
+			"cardMain": "rtSEdW_cardMain",
+			"cardName": "rtSEdW_cardName",
+			"cards": "rtSEdW_cards",
 			"creatorButton": "rtSEdW_creatorButton",
-			"groupHead": "rtSEdW_groupHead",
+			"deleteConfirm": "rtSEdW_deleteConfirm",
+			"deleteDialog": "rtSEdW_deleteDialog",
+			"dialog": "rtSEdW_dialog",
 			"dialogFields": "rtSEdW_dialogFields",
+			"error": "rtSEdW_error",
+			"field": "rtSEdW_field",
+			"fieldLabel": "rtSEdW_fieldLabel",
+			"group": "rtSEdW_group",
+			"groupHead": "rtSEdW_groupHead",
+			"iconButton": "rtSEdW_iconButton",
+			"iconDanger": "rtSEdW_iconDanger",
+			"inUse": "rtSEdW_inUse",
+			"input": "rtSEdW_input",
+			"intro": "rtSEdW_intro",
+			"revealedPath": "rtSEdW_revealedPath",
+			"revealedPathLabel": "rtSEdW_revealedPathLabel",
+			"secondaryButton": "rtSEdW_secondaryButton",
 			"section": "rtSEdW_section",
-			"revealedPath": "rtSEdW_revealedPath"
+			"title": "rtSEdW_title",
+			"viewerCode": "rtSEdW_viewerCode"
 		};
 		//#endregion
 		//#region lib/types/client/AgentPresetSection.js
@@ -1557,7 +1556,8 @@ window.__ModuleLoader__.load({
 			"slots",
 			"locale",
 			"connection",
-			"remote"
+			"remote",
+			"settingsScope"
 		];
 		/**
 		* Mount the General-settings row.
@@ -1565,7 +1565,7 @@ window.__ModuleLoader__.load({
 		*/
 		function apply(ctx) {
 			const { api } = ctx.get("connection");
-			const controller = new AgentPresetSettingsController(api);
+			const controller = new AgentPresetSettingsController(api, ctx.settingsScope.describe());
 			const rosterReaders = /* @__PURE__ */ new Set();
 			const section = new AgentPresetSectionController(api, () => {
 				controller.load();

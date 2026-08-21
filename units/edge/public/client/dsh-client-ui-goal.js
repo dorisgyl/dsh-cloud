@@ -18,15 +18,15 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var GoalBar_module_css_default = {
-			"dock": "nLMEza_dock",
-			"objective": "nLMEza_objective",
-			"objectiveInput": "nLMEza_objectiveInput",
-			"label": "nLMEza_label",
-			"iconBtn": "nLMEza_iconBtn",
 			"actions": "nLMEza_actions",
+			"bar": "nLMEza_bar",
+			"dock": "nLMEza_dock",
 			"error": "nLMEza_error",
 			"goalGlyph": "nLMEza_goalGlyph",
-			"bar": "nLMEza_bar"
+			"iconBtn": "nLMEza_iconBtn",
+			"label": "nLMEza_label",
+			"objective": "nLMEza_objective",
+			"objectiveInput": "nLMEza_objectiveInput"
 		};
 		//#endregion
 		//#region lib/types/client/GoalBar.js
@@ -261,9 +261,9 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var GoalCommandInputView_module_css_default = {
-			"stack": "oRe1gG_stack",
 			"bubble": "oRe1gG_bubble",
-			"row": "oRe1gG_row"
+			"row": "oRe1gG_row",
+			"stack": "oRe1gG_stack"
 		};
 		//#endregion
 		//#region lib/types/client/GoalCommandInputView.js

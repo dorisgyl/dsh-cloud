@@ -20,17 +20,17 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var fields_module_css_default = {
+			"badge": "At1oFq_badge",
 			"badgeMuted": "At1oFq_badgeMuted",
-			"reset": "At1oFq_reset",
-			"head": "At1oFq_head",
-			"hint": "At1oFq_hint",
-			"label": "At1oFq_label",
 			"badges": "At1oFq_badges",
 			"field": "At1oFq_field",
-			"badge": "At1oFq_badge",
+			"head": "At1oFq_head",
+			"hint": "At1oFq_hint",
 			"input": "At1oFq_input",
 			"inputInvalid": "At1oFq_inputInvalid",
-			"invalid": "At1oFq_invalid"
+			"invalid": "At1oFq_invalid",
+			"label": "At1oFq_label",
+			"reset": "At1oFq_reset"
 		};
 		//#endregion
 		//#region lib/types/client/fields.js
@@ -162,21 +162,21 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var PluginCard_module_css_default = {
-			"chevronOpen": "YyYd_a_chevronOpen",
-			"failed": "YyYd_a_failed",
-			"readOnly": "YyYd_a_readOnly",
-			"footer": "YyYd_a_footer",
-			"header": "YyYd_a_header",
-			"description": "YyYd_a_description",
-			"save": "YyYd_a_save",
-			"name": "YyYd_a_name",
-			"chevron": "YyYd_a_chevron",
-			"cardOpen": "YyYd_a_cardOpen",
-			"headText": "YyYd_a_headText",
+			"body": "YyYd_a_body",
 			"card": "YyYd_a_card",
-			"pending": "YyYd_a_pending",
+			"cardOpen": "YyYd_a_cardOpen",
+			"chevron": "YyYd_a_chevron",
+			"chevronOpen": "YyYd_a_chevronOpen",
+			"description": "YyYd_a_description",
 			"discard": "YyYd_a_discard",
-			"body": "YyYd_a_body"
+			"failed": "YyYd_a_failed",
+			"footer": "YyYd_a_footer",
+			"headText": "YyYd_a_headText",
+			"header": "YyYd_a_header",
+			"name": "YyYd_a_name",
+			"pending": "YyYd_a_pending",
+			"readOnly": "YyYd_a_readOnly",
+			"save": "YyYd_a_save"
 		};
 		//#endregion
 		//#region lib/types/client/PluginCard.js
@@ -371,26 +371,41 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var PluginsSettingsSection_module_css_default = {
-			"heading": "pbvGtq_heading",
 			"cards": "pbvGtq_cards",
-			"intro": "pbvGtq_intro",
-			"tabs": "pbvGtq_tabs",
-			"panel": "pbvGtq_panel",
 			"empty": "pbvGtq_empty",
+			"heading": "pbvGtq_heading",
+			"intro": "pbvGtq_intro",
+			"panel": "pbvGtq_panel",
+			"section": "pbvGtq_section",
 			"tab": "pbvGtq_tab",
-			"section": "pbvGtq_section"
+			"tabs": "pbvGtq_tabs"
 		};
 		//#endregion
 		//#region lib/types/client/ConfigurablePluginsTab.js
-		/** Render cards registered by plugins that expose editable settings. */
-		function ConfigurablePluginsTab({ t, renderSlot, cardCount }) {
-			return cardCount === 0 ? (0, react_jsx_runtime.jsx)("p", {
+		/**
+		* Configurable Host plugins contributed to the shared Plugins section.
+		*
+		* The tab enumerates settings namespaces but never interprets one — a card
+		* arrives through `settings.plugin.item` keyed by the namespace it edits, so a
+		* plugin that ships a browser half owns its own card and this tab only decides
+		* which keys to dispatch.
+		*/
+		/**
+		* Render cards registered by plugins that expose editable settings.
+		* @param props - locale copy, slot rendering, and the namespaces to dispatch.
+		* @returns the card list, or the empty line once the Host has answered.
+		*/
+		function ConfigurablePluginsTab(props) {
+			const { t, renderSlot } = props;
+			const { loaded, namespaces } = props.useConfigurablePlugins((snapshot) => snapshot);
+			if (namespaces.length > 0) return (0, react_jsx_runtime.jsx)("ul", {
+				className: PluginsSettingsSection_module_css_default.cards,
+				children: namespaces.map((ns) => (0, react_jsx_runtime.jsx)(react.Fragment, { children: renderSlot("settings.plugin.item", {}, { entryKey: ns }) }, ns))
+			});
+			return loaded ? (0, react_jsx_runtime.jsx)("p", {
 				className: PluginsSettingsSection_module_css_default.empty,
 				children: t("empty")
-			}) : (0, react_jsx_runtime.jsx)("ul", {
-				className: PluginsSettingsSection_module_css_default.cards,
-				children: renderSlot("settings.plugin.item", {})
-			});
+			}) : null;
 		}
 		//#endregion
 		//#region lib/types/client/PluginsSettingsSection.js
@@ -893,6 +908,74 @@ window.__ModuleLoader__.load({
 			}
 		};
 		//#endregion
+		//#region lib/types/client/tab-store.js
+		/**
+		* The configurable-plugins tab's card list.
+		*
+		* The tab dispatches its slot by settings namespace, so what it renders is
+		* the intersection of two ledgers: the namespaces the Host serves and the
+		* cards registered into `settings.plugin.item`. A served namespace no card
+		* claims renders nothing — another surface owns it, or this deployment ships
+		* no browser half for it — and a card whose namespace the Host does not serve
+		* is never dispatched, so a plugin this deployment did not compose leaves no
+		* trace and does not count toward the empty line.
+		*/
+		/** Derives the served namespaces from the shared describe mirror and pairs them with the cards that claim them. */
+		var ConfigurablePluginsTabController = class {
+			describeFace;
+			entries;
+			store = (0, _deepseek_ai_dsh_client_runtime_client.createSnapshotStore)({
+				loaded: false,
+				namespaces: []
+			});
+			disposed = false;
+			unsubscribe;
+			/**
+			* @param describeFace - the shared mirror's describe face; its refreshes
+			* (document commits, reconnects) are what keep the served set current.
+			* @param entries - reads the cards currently registered into the section's slot.
+			*/
+			constructor(describeFace, entries) {
+				this.describeFace = describeFace;
+				this.entries = entries;
+				this.unsubscribe = describeFace.subscribe(() => {
+					this.publish();
+				});
+				describeFace.ensure();
+				this.publish();
+			}
+			/** Republish after the slot ledger changed; a card registered late joins here. */
+			refresh() {
+				if (this.disposed) return;
+				this.publish();
+			}
+			/** Stop publishing and stop following the mirror. */
+			dispose() {
+				this.disposed = true;
+				this.unsubscribe();
+			}
+			/**
+			* Build the face the tab's slot registration injects.
+			* @returns the tab's snapshot source.
+			*/
+			inject() {
+				return { hooks: { configurablePlugins: this.store } };
+			}
+			publish() {
+				if (this.disposed) return;
+				const mirrored = this.describeFace.getSnapshot();
+				const loaded = mirrored.view !== void 0;
+				const served = new Set(mirrored.view?.namespaces.map((view) => view.ns) ?? []);
+				const namespaces = this.entries().flatMap((entry) => entry.options.key !== void 0 && served.has(entry.options.key) ? [entry.options.key] : []);
+				const previous = this.store.getSnapshot();
+				if (previous.loaded === loaded && previous.namespaces.length === namespaces.length && previous.namespaces.every((ns, index) => ns === namespaces[index])) return;
+				this.store.set({
+					loaded,
+					namespaces
+				});
+			}
+		};
+		//#endregion
 		//#region lib/types/client/web-search-card-controller.js
 		/**
 		* The web-search card's staged form over the `web-search-deepseek` settings
@@ -1155,6 +1238,13 @@ window.__ModuleLoader__.load({
 			ctx.effect(() => ctx.remote.$on("credentials/updated", (ref) => {
 				webSearch.refreshCredential(ref);
 			}), "ui-settings-plugins: credential invalidations");
+			const configurable = new ConfigurablePluginsTabController(ctx.settingsScope.describe(), () => ctx.slots.entries("settings.plugin.item"));
+			ctx.effect(() => () => {
+				configurable.dispose();
+			}, "ui-settings-plugins: tab directory");
+			ctx.effect(() => ctx.slots.subscribe("settings.plugin.item", () => {
+				configurable.refresh();
+			}), "ui-settings-plugins: card ledger");
 			let tabsVersion = -1;
 			let tabsRevision = -1;
 			let tabs = [];
@@ -1201,31 +1291,28 @@ window.__ModuleLoader__.load({
 				order: 0,
 				label: () => t("configurableTab"),
 				locale: NS,
-				inject: () => ({ cardCount: ctx.slots.entries("settings.plugin.item").length }),
+				inject: () => configurable.inject(),
 				children: { "settings.plugin.item": {
-					kind: "list",
+					kind: "keyed",
 					scope: "root"
 				} }
 			}, ConfigurablePluginsTab));
 			ctx.slots.inject("settings.plugin.item", function* () {
 				yield ctx.slots.register({
 					name: "settings.plugin.item",
-					id: "bash",
-					order: 0,
+					key: SHELL_NS,
 					locale: NS,
 					inject: () => bash.inject()
 				}, BashCard);
 				yield ctx.slots.register({
 					name: "settings.plugin.item",
-					id: "agent-loop",
-					order: 10,
+					key: AGENT_LOOP_NS,
 					locale: NS,
 					inject: () => agentLoop.inject()
 				}, AgentLoopCard);
 				yield ctx.slots.register({
 					name: "settings.plugin.item",
-					id: "web-search",
-					order: 20,
+					key: WEB_SEARCH_NS,
 					locale: NS,
 					inject: () => webSearch.inject()
 				}, WebSearchCard);

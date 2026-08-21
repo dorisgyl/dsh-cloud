@@ -19,30 +19,30 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var SubagentCatalogAction_module_css_default = {
-			"triggerOpen": "h8S2Va_triggerOpen",
-			"loadingRow": "h8S2Va_loadingRow",
-			"clickarea": "h8S2Va_clickarea",
-			"children": "h8S2Va_children",
-			"metricToken": "h8S2Va_metricToken",
-			"root": "h8S2Va_root",
-			"count": "h8S2Va_count",
 			"activitySlot": "h8S2Va_activitySlot",
-			"node": "h8S2Va_node",
-			"menu": "h8S2Va_menu",
-			"metrics": "h8S2Va_metrics",
-			"notice": "h8S2Va_notice",
-			"disclosureOpen": "h8S2Va_disclosureOpen",
-			"disclosure": "h8S2Va_disclosure",
-			"disabled": "h8S2Va_disabled",
-			"error": "h8S2Va_error",
+			"children": "h8S2Va_children",
+			"clickarea": "h8S2Va_clickarea",
 			"content": "h8S2Va_content",
+			"count": "h8S2Va_count",
+			"disabled": "h8S2Va_disabled",
+			"disclosure": "h8S2Va_disclosure",
+			"disclosureOpen": "h8S2Va_disclosureOpen",
+			"disclosureSpace": "h8S2Va_disclosureSpace",
+			"error": "h8S2Va_error",
 			"label": "h8S2Va_label",
+			"loadingRow": "h8S2Va_loadingRow",
+			"menu": "h8S2Va_menu",
+			"metricDuration": "h8S2Va_metricDuration",
+			"metricToken": "h8S2Va_metricToken",
+			"metrics": "h8S2Va_metrics",
+			"node": "h8S2Va_node",
+			"notice": "h8S2Va_notice",
+			"refresh": "h8S2Va_refresh",
+			"root": "h8S2Va_root",
 			"row": "h8S2Va_row",
 			"summary": "h8S2Va_summary",
 			"trigger": "h8S2Va_trigger",
-			"refresh": "h8S2Va_refresh",
-			"disclosureSpace": "h8S2Va_disclosureSpace",
-			"metricDuration": "h8S2Va_metricDuration"
+			"triggerOpen": "h8S2Va_triggerOpen"
 		};
 		//#endregion
 		//#region lib/types/client/SubagentCatalogAction.js
@@ -624,9 +624,8 @@ window.__ModuleLoader__.load({
 		};
 		//#endregion
 		//#region lib/types/client/index.js
-		/** Required services for references, conversation slots, and session navigation. */
+		/** Required services for conversation slots and session navigation. */
 		const inject = [
-			"inputTriggers",
 			"sessions",
 			"slots",
 			"locale"
@@ -640,7 +639,7 @@ window.__ModuleLoader__.load({
 			return owner.session?.running === true ? null : { reason: "parent-unavailable" };
 		}
 		/**
-		* Client plugin body: register the '@' subagent source over the root session list.
+		* Client plugin body: register the subagent catalog and read-only composer seats.
 		* @param ctx - client root context.
 		*/
 		function apply(ctx) {
@@ -649,32 +648,6 @@ window.__ModuleLoader__.load({
 				en
 			}), "ui-subagent: dictionaries");
 			const sessions = ctx.sessions;
-			const childLabels = (session, query) => {
-				const { byId } = sessions.list.getSnapshot();
-				return Object.values(byId).filter((child) => child.parentId === session.sessionId && child.running && child.displayTitle.includes(query)).map((child) => child.displayTitle);
-			};
-			const source = {
-				trigger: "@",
-				name: "subagent",
-				candidates(session, { query }) {
-					return Promise.resolve(childLabels(session, query).map((name) => ({ name })));
-				},
-				lexicon(session) {
-					return childLabels(session, "");
-				},
-				subscribeLexicon(_session, listener) {
-					return sessions.list.subscribe(listener);
-				},
-				onPick({ candidate }) {
-					return { text: `@${candidate.name} ` };
-				},
-				codec: {
-					clipboardText: (ref) => `@${ref}`,
-					serialize: (ref) => Promise.resolve(`@${ref}`)
-				}
-			};
-			const inputTriggers = ctx.get("inputTriggers");
-			ctx.effect(() => inputTriggers.registerSource(source), "ui-subagent: @ source");
 			const catalogActions = (_parentSessionId) => ({
 				openChild(address) {
 					sessions.openSubagent(address);

@@ -122,15 +122,15 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var PlanReviewPanel_module_css_default = {
-			"dot": "LVzXQa_dot",
-			"feedback": "LVzXQa_feedback",
-			"frame": "LVzXQa_frame",
-			"strip": "LVzXQa_strip",
+			"actions": "LVzXQa_actions",
 			"body": "LVzXQa_body",
 			"card": "LVzXQa_card",
-			"actions": "LVzXQa_actions",
 			"discuss": "LVzXQa_discuss",
-			"footer": "LVzXQa_footer"
+			"dot": "LVzXQa_dot",
+			"feedback": "LVzXQa_feedback",
+			"footer": "LVzXQa_footer",
+			"frame": "LVzXQa_frame",
+			"strip": "LVzXQa_strip"
 		};
 		//#endregion
 		//#region lib/types/client/PlanReviewPanel.js
@@ -230,7 +230,7 @@ window.__ModuleLoader__.load({
 		}
 		//#endregion
 		//#region \0dsh-css:/home/runner/work/deepseek-harness/deepseek-harness/packages/client/ui-user-questions/src/client/QuestionComposer.module.css.mjs
-		const css = ".Mbwy4a_frame{padding:6px calc(var(--dsh-composer-side-clearance) + 16px) 10px;justify-content:center;display:flex}.Mbwy4a_card{width:100%;max-width:var(--dsh-chat-content-width);border:1px solid var(--dsw-alias-border-l2-darkmode-thin);background:var(--dsw-specific-input-major);max-height:min(60vh,520px);box-shadow:var(--dsw-shadow-lv2);color:var(--dsw-alias-label-primary);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2);border-radius:20px;flex-direction:column;padding:0 0 10px;display:flex;overflow:hidden}.Mbwy4a_card,.Mbwy4a_card *{box-sizing:border-box}.Mbwy4a_header{flex-shrink:0;justify-content:space-between;align-items:flex-start;gap:16px;padding:20px 16px 0 24px;display:flex}.Mbwy4a_headingBlock{min-width:0}.Mbwy4a_eyebrow{color:var(--dsw-alias-label-tertiary);margin-bottom:5px;font-size:11px;line-height:16px}.Mbwy4a_title{margin:0;font-size:16px;font-weight:500;line-height:22px}.Mbwy4a_detail{margin:0 2px 8px}.Mbwy4a_footerActions{flex-shrink:0;align-items:center;gap:12px;display:flex}.Mbwy4a_pager{flex-shrink:0;align-items:center;gap:6px;display:flex}.Mbwy4a_progress{color:var(--dsw-alias-label-secondary);white-space:nowrap;word-spacing:-2px;padding:0 4px;font-size:14px;font-weight:500;line-height:24px}.Mbwy4a_iconButton{width:24px;height:24px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:999px;place-items:center;padding:0;display:grid}.Mbwy4a_iconButton:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.Mbwy4a_iconButton:disabled{color:var(--dsw-alias-label-dimmed);cursor:default}.Mbwy4a_body{overscroll-behavior:contain;flex-direction:column;flex:auto;min-height:0;display:flex;overflow-y:auto}.Mbwy4a_options{flex-direction:column;gap:1px;margin:8px 0 0;padding:4px 12px;display:flex}.Mbwy4a_option{width:100%;min-height:40px;color:inherit;text-align:left;cursor:pointer;background:0 0;border:1px solid #0000;border-radius:12px;flex-shrink:0;align-items:flex-start;gap:8px;padding:8px 12px 8px 8px;transition:background-color .12s,border-color .12s;display:flex}.Mbwy4a_option:hover:not(:disabled),.Mbwy4a_optionSelected{background:var(--dsw-alias-interactive-bg-hover)}.Mbwy4a_optionSelected{border-color:var(--dsw-alias-border-l2)}.Mbwy4a_option:disabled{cursor:default}.Mbwy4a_number{background:var(--dsw-alias-bg-overlay);width:20px;height:20px;color:var(--dsw-alias-label-secondary);border-radius:6px;flex:0 0 20px;place-items:center;margin-top:2px;font-size:12px;font-weight:500;line-height:18px;display:grid}.Mbwy4a_checkbox{flex:0 0 20px;place-items:center;width:20px;height:20px;margin-top:2px;display:grid}.Mbwy4a_checkbox:before{content:\"\";border:1px solid var(--dsw-alias-border-l4);border-radius:4px;grid-area:1/1;width:14px;height:14px;transition:background-color .12s,border-color .12s}.Mbwy4a_checkbox>svg{grid-area:1/1}.Mbwy4a_checkboxChecked{color:var(--dsw-alias-label-primary-foreground)}.Mbwy4a_checkboxChecked:before{border-color:var(--dsw-alias-label-primary);background:var(--dsw-alias-label-primary)}.Mbwy4a_optionCopy{flex:1;min-width:0}.Mbwy4a_optionLine{flex-wrap:wrap;align-items:baseline;gap:2px 6px;display:flex}.Mbwy4a_optionLabel{font-size:14px;font-weight:500;line-height:24px}.Mbwy4a_badge{background:var(--dsw-specific-sidebar-nav-item-active-accent);color:var(--dsw-alias-button-info-fill);border-radius:6px;padding:0 4px;font-size:11px;font-weight:600;line-height:18px}.Mbwy4a_description{color:var(--dsw-alias-label-tertiary);font-size:14px;font-weight:400;line-height:24px}.Mbwy4a_customRow{border:1px solid #0000;border-radius:12px;flex-shrink:0;align-items:flex-start;gap:8px;width:100%;min-height:40px;padding:8px 12px 8px 8px;transition:background-color .12s,border-color .12s;display:flex}.Mbwy4a_customRow:hover,.Mbwy4a_customRow:focus-within,.Mbwy4a_customRowActive{background:var(--dsw-alias-interactive-bg-hover)}.Mbwy4a_customRow:focus-within,.Mbwy4a_customRowActive{border-color:var(--dsw-alias-border-l2)}.Mbwy4a_customInput{min-width:0;color:var(--dsw-alias-label-primary);caret-color:var(--dsw-alias-state-business-primary);font:inherit;background:0 0;border:none;outline:none;flex:1;padding:0;font-size:14px;line-height:24px}.Mbwy4a_customInput::placeholder{color:var(--dsw-alias-label-caption)}.Mbwy4a_customTextarea{resize:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-module-platform);min-height:64px;max-height:140px;color:var(--dsw-alias-label-primary);caret-color:var(--dsw-alias-state-business-primary);font:inherit;border-radius:10px;outline:none;flex-shrink:0;margin:0 12px;padding:8px 12px;font-size:14px;line-height:24px;display:block}.Mbwy4a_customTextarea:focus{border-color:var(--dsw-alias-state-business-primary)}.Mbwy4a_customTextarea::placeholder{color:var(--dsw-alias-label-caption)}.Mbwy4a_footer{flex-shrink:0;justify-content:space-between;align-items:center;gap:12px;margin-top:12px;padding:0 10px 0 18px;display:flex}.Mbwy4a_feedback{min-height:16px;color:var(--dsw-alias-state-error-primary);text-align:right;flex:1;font-size:11px;line-height:16px}@media (width<=720px){.Mbwy4a_card{border-radius:16px}.Mbwy4a_header{padding:10px 12px 0 18px}.Mbwy4a_options{padding:4px 8px}.Mbwy4a_title{font-size:15px;line-height:21px}.Mbwy4a_option,.Mbwy4a_customRow{padding:8px 6px}.Mbwy4a_footer{align-items:flex-end;padding:0 10px}.Mbwy4a_footerActions{flex-shrink:0}}@media (prefers-reduced-motion:reduce){.Mbwy4a_option,.Mbwy4a_customRow{transition:none}}";
+		const css = ".Mbwy4a_frame{padding:6px calc(var(--dsh-composer-side-clearance) + 16px) 10px;justify-content:center;display:flex}.Mbwy4a_card{width:100%;max-width:var(--dsh-chat-content-width);border:1px solid var(--dsw-alias-border-l2-darkmode-thin);background:var(--dsw-specific-input-major);max-height:min(60vh,520px);box-shadow:var(--dsw-shadow-lv2);color:var(--dsw-alias-label-primary);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2);border-radius:20px;flex-direction:column;padding:0 0 10px;display:flex;overflow:hidden}.Mbwy4a_card,.Mbwy4a_card *{box-sizing:border-box}.Mbwy4a_cardMinimized{max-height:none}.Mbwy4a_cardMinimized .Mbwy4a_header{padding-bottom:14px}.Mbwy4a_headerActions{flex-shrink:0;align-items:center;gap:4px;display:flex}.Mbwy4a_header{flex-shrink:0;justify-content:space-between;align-items:flex-start;gap:16px;padding:20px 16px 0 24px;display:flex}.Mbwy4a_headingBlock{min-width:0}.Mbwy4a_eyebrow{color:var(--dsw-alias-label-tertiary);margin-bottom:5px;font-size:11px;line-height:16px}.Mbwy4a_title{margin:0;font-size:16px;font-weight:500;line-height:22px}.Mbwy4a_detail{margin:0 2px 8px}.Mbwy4a_footerActions{flex-shrink:0;align-items:center;gap:12px;display:flex}.Mbwy4a_pager{flex-shrink:0;align-items:center;gap:6px;display:flex}.Mbwy4a_progress{color:var(--dsw-alias-label-secondary);white-space:nowrap;word-spacing:-2px;padding:0 4px;font-size:14px;font-weight:500;line-height:24px}.Mbwy4a_iconButton{width:24px;height:24px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:999px;place-items:center;padding:0;display:grid}.Mbwy4a_iconButton:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.Mbwy4a_iconButton:disabled{color:var(--dsw-alias-label-dimmed);cursor:default}.Mbwy4a_body{overscroll-behavior:contain;flex-direction:column;flex:auto;min-height:0;display:flex;overflow-y:auto}.Mbwy4a_options{flex-direction:column;gap:1px;margin:8px 0 0;padding:4px 12px;display:flex}.Mbwy4a_option{width:100%;min-height:40px;color:inherit;text-align:left;cursor:pointer;background:0 0;border:1px solid #0000;border-radius:12px;flex-shrink:0;align-items:flex-start;gap:8px;padding:8px 12px 8px 8px;transition:background-color .12s,border-color .12s;display:flex}.Mbwy4a_option:hover:not(:disabled),.Mbwy4a_optionSelected{background:var(--dsw-alias-interactive-bg-hover)}.Mbwy4a_optionSelected{border-color:var(--dsw-alias-border-l2)}.Mbwy4a_option:disabled{cursor:default}.Mbwy4a_number{background:var(--dsw-alias-bg-overlay);width:20px;height:20px;color:var(--dsw-alias-label-secondary);border-radius:6px;flex:0 0 20px;place-items:center;margin-top:2px;font-size:12px;font-weight:500;line-height:18px;display:grid}.Mbwy4a_checkbox{flex:0 0 20px;place-items:center;width:20px;height:20px;margin-top:2px;display:grid}.Mbwy4a_checkbox:before{content:\"\";border:1px solid var(--dsw-alias-border-l4);border-radius:4px;grid-area:1/1;width:14px;height:14px;transition:background-color .12s,border-color .12s}.Mbwy4a_checkbox>svg{grid-area:1/1}.Mbwy4a_checkboxChecked{color:var(--dsw-alias-label-primary-foreground)}.Mbwy4a_checkboxChecked:before{border-color:var(--dsw-alias-label-primary);background:var(--dsw-alias-label-primary)}.Mbwy4a_optionCopy{flex:1;min-width:0}.Mbwy4a_optionLine{flex-wrap:wrap;align-items:baseline;gap:2px 6px;display:flex}.Mbwy4a_optionLabel{font-size:14px;font-weight:500;line-height:24px}.Mbwy4a_badge{background:var(--dsw-specific-sidebar-nav-item-active-accent);color:var(--dsw-alias-button-info-fill);border-radius:6px;padding:0 4px;font-size:11px;font-weight:600;line-height:18px}.Mbwy4a_description{color:var(--dsw-alias-label-tertiary);font-size:14px;font-weight:400;line-height:24px}.Mbwy4a_customRow{border:1px solid #0000;border-radius:12px;flex-shrink:0;align-items:flex-start;gap:8px;width:100%;min-height:40px;padding:8px 12px 8px 8px;transition:background-color .12s,border-color .12s;display:flex}.Mbwy4a_customRow:hover,.Mbwy4a_customRow:focus-within,.Mbwy4a_customRowActive{background:var(--dsw-alias-interactive-bg-hover)}.Mbwy4a_customRow:focus-within,.Mbwy4a_customRowActive{border-color:var(--dsw-alias-border-l2)}.Mbwy4a_customInput{min-width:0;color:var(--dsw-alias-label-primary);caret-color:var(--dsw-alias-state-business-primary);font:inherit;background:0 0;border:none;outline:none;flex:1;padding:0;font-size:14px;line-height:24px}.Mbwy4a_customInput::placeholder{color:var(--dsw-alias-label-caption)}.Mbwy4a_customTextarea{resize:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-module-platform);min-height:64px;max-height:140px;color:var(--dsw-alias-label-primary);caret-color:var(--dsw-alias-state-business-primary);font:inherit;border-radius:10px;outline:none;flex-shrink:0;margin:0 12px;padding:8px 12px;font-size:14px;line-height:24px;display:block}.Mbwy4a_customTextarea:focus{border-color:var(--dsw-alias-state-business-primary)}.Mbwy4a_customTextarea::placeholder{color:var(--dsw-alias-label-caption)}.Mbwy4a_footer{flex-shrink:0;justify-content:space-between;align-items:center;gap:12px;margin-top:12px;padding:0 10px 0 18px;display:flex}.Mbwy4a_feedback{min-height:16px;color:var(--dsw-alias-state-error-primary);text-align:right;flex:1;font-size:11px;line-height:16px}@media (width<=720px){.Mbwy4a_card{border-radius:16px}.Mbwy4a_header{padding:10px 12px 0 18px}.Mbwy4a_options{padding:4px 8px}.Mbwy4a_title{font-size:15px;line-height:21px}.Mbwy4a_option,.Mbwy4a_customRow{padding:8px 6px}.Mbwy4a_footer{align-items:flex-end;padding:0 10px}.Mbwy4a_footerActions{flex-shrink:0}}@media (prefers-reduced-motion:reduce){.Mbwy4a_option,.Mbwy4a_customRow{transition:none}}";
 		const tagId = "@deepseek-ai/dsh-client-ui-user-questions/QuestionComposer.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
 			const tag = document.createElement("style");
@@ -240,35 +240,37 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var QuestionComposer_module_css_default = {
-			"pager": "Mbwy4a_pager",
-			"optionCopy": "Mbwy4a_optionCopy",
-			"footer": "Mbwy4a_footer",
-			"iconButton": "Mbwy4a_iconButton",
-			"option": "Mbwy4a_option",
-			"description": "Mbwy4a_description",
-			"optionLine": "Mbwy4a_optionLine",
-			"card": "Mbwy4a_card",
-			"customRow": "Mbwy4a_customRow",
-			"eyebrow": "Mbwy4a_eyebrow",
-			"options": "Mbwy4a_options",
-			"body": "Mbwy4a_body",
-			"customRowActive": "Mbwy4a_customRowActive",
-			"detail": "Mbwy4a_detail",
-			"customInput": "Mbwy4a_customInput",
-			"title": "Mbwy4a_title",
-			"checkbox": "Mbwy4a_checkbox",
-			"feedback": "Mbwy4a_feedback",
-			"headingBlock": "Mbwy4a_headingBlock",
-			"progress": "Mbwy4a_progress",
-			"checkboxChecked": "Mbwy4a_checkboxChecked",
-			"header": "Mbwy4a_header",
-			"optionLabel": "Mbwy4a_optionLabel",
 			"badge": "Mbwy4a_badge",
+			"body": "Mbwy4a_body",
+			"card": "Mbwy4a_card",
+			"cardMinimized": "Mbwy4a_cardMinimized",
+			"checkbox": "Mbwy4a_checkbox",
+			"checkboxChecked": "Mbwy4a_checkboxChecked",
+			"customInput": "Mbwy4a_customInput",
+			"customRow": "Mbwy4a_customRow",
+			"customRowActive": "Mbwy4a_customRowActive",
 			"customTextarea": "Mbwy4a_customTextarea",
+			"description": "Mbwy4a_description",
+			"detail": "Mbwy4a_detail",
+			"eyebrow": "Mbwy4a_eyebrow",
+			"feedback": "Mbwy4a_feedback",
+			"footer": "Mbwy4a_footer",
 			"footerActions": "Mbwy4a_footerActions",
-			"optionSelected": "Mbwy4a_optionSelected",
+			"frame": "Mbwy4a_frame",
+			"header": "Mbwy4a_header",
+			"headerActions": "Mbwy4a_headerActions",
+			"headingBlock": "Mbwy4a_headingBlock",
+			"iconButton": "Mbwy4a_iconButton",
 			"number": "Mbwy4a_number",
-			"frame": "Mbwy4a_frame"
+			"option": "Mbwy4a_option",
+			"optionCopy": "Mbwy4a_optionCopy",
+			"optionLabel": "Mbwy4a_optionLabel",
+			"optionLine": "Mbwy4a_optionLine",
+			"optionSelected": "Mbwy4a_optionSelected",
+			"options": "Mbwy4a_options",
+			"pager": "Mbwy4a_pager",
+			"progress": "Mbwy4a_progress",
+			"title": "Mbwy4a_title"
 		};
 		//#endregion
 		//#region lib/types/client/QuestionComposer.js
@@ -326,6 +328,8 @@ window.__ModuleLoader__.load({
 			})));
 			const [busy, setBusy] = (0, react.useState)(null);
 			const [error, setError] = (0, react.useState)(null);
+			const [minimized, setMinimized] = (0, react.useState)(false);
+			const focusedQuestions = (0, react.useRef)(/* @__PURE__ */ new Set());
 			const question = questions[index];
 			const draft = drafts[index];
 			const hasOptions = (question.options?.length ?? 0) > 0;
@@ -432,21 +436,33 @@ window.__ModuleLoader__.load({
 				className: QuestionComposer_module_css_default.frame,
 				"data-question-key": pending.key,
 				children: (0, react_jsx_runtime.jsxs)("section", {
-					className: QuestionComposer_module_css_default.card,
+					className: clsx(QuestionComposer_module_css_default.card, minimized && QuestionComposer_module_css_default.cardMinimized),
 					"aria-labelledby": `question-${pending.key}-${String(index)}`,
-					children: [
-						(0, react_jsx_runtime.jsxs)("header", {
-							className: QuestionComposer_module_css_default.header,
-							children: [(0, react_jsx_runtime.jsxs)("div", {
-								className: QuestionComposer_module_css_default.headingBlock,
-								children: [question.header !== void 0 && (0, react_jsx_runtime.jsx)("div", {
-									className: QuestionComposer_module_css_default.eyebrow,
-									children: question.header
-								}), (0, react_jsx_runtime.jsx)("h2", {
-									className: QuestionComposer_module_css_default.title,
-									id: `question-${pending.key}-${String(index)}`,
-									children: question.question
-								})]
+					children: [(0, react_jsx_runtime.jsxs)("header", {
+						className: QuestionComposer_module_css_default.header,
+						children: [(0, react_jsx_runtime.jsxs)("div", {
+							className: QuestionComposer_module_css_default.headingBlock,
+							children: [question.header !== void 0 && (0, react_jsx_runtime.jsx)("div", {
+								className: QuestionComposer_module_css_default.eyebrow,
+								children: question.header
+							}), (0, react_jsx_runtime.jsx)("h2", {
+								className: QuestionComposer_module_css_default.title,
+								id: `question-${pending.key}-${String(index)}`,
+								children: question.question
+							})]
+						}), (0, react_jsx_runtime.jsxs)("div", {
+							className: QuestionComposer_module_css_default.headerActions,
+							children: [(0, react_jsx_runtime.jsx)("button", {
+								type: "button",
+								className: QuestionComposer_module_css_default.iconButton,
+								"aria-label": t(minimized ? "nav.maximize" : "nav.minimize"),
+								title: t(minimized ? "nav.maximize" : "nav.minimize"),
+								"aria-expanded": !minimized,
+								disabled: busy !== null,
+								onClick: () => {
+									setMinimized((current) => !current);
+								},
+								children: minimized ? (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronUpOutline14, {}) : (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronDownOutline14, {})
 							}), (0, react_jsx_runtime.jsx)("button", {
 								type: "button",
 								className: QuestionComposer_module_css_default.iconButton,
@@ -456,153 +472,154 @@ window.__ModuleLoader__.load({
 								onClick: cancelFlow,
 								children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCloseOutline16, {})
 							})]
-						}),
-						(0, react_jsx_runtime.jsxs)("div", {
-							className: QuestionComposer_module_css_default.body,
-							"data-question-scroll": true,
-							children: [question.detail !== void 0 && (0, react_jsx_runtime.jsx)("div", {
-								className: QuestionComposer_module_css_default.detail,
-								children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.MarkdownText, { text: question.detail })
-							}), (0, react_jsx_runtime.jsxs)("div", {
-								className: QuestionComposer_module_css_default.options,
-								role: question.multiSelect === true ? "group" : "radiogroup",
-								children: [(question.options ?? []).map((option, optionIndex) => {
-									const selected = draft.selected.includes(option.label);
-									const display = parseRecommendedLabel(option.label);
-									return (0, react_jsx_runtime.jsxs)("button", {
-										type: "button",
-										className: clsx(QuestionComposer_module_css_default.option, selected && question.multiSelect !== true && QuestionComposer_module_css_default.optionSelected),
-										role: question.multiSelect === true ? "checkbox" : "radio",
-										"aria-checked": selected,
-										"aria-label": display.label,
-										disabled: busy !== null,
-										onClick: () => {
-											choose(option.label);
-										},
-										onKeyDown: (event) => {
-											if (event.key !== "Enter" || !drafts.every(completed)) return;
-											event.preventDefault();
-											submitDrafts(drafts);
-										},
-										children: [question.multiSelect === true ? (0, react_jsx_runtime.jsx)("span", {
-											className: clsx(QuestionComposer_module_css_default.checkbox, selected && QuestionComposer_module_css_default.checkboxChecked),
-											"aria-hidden": "true",
-											children: selected && (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCheckOutline14, { size: 12 })
-										}) : (0, react_jsx_runtime.jsx)("span", {
-											className: QuestionComposer_module_css_default.number,
-											children: optionIndex + 1
-										}), (0, react_jsx_runtime.jsx)("span", {
-											className: QuestionComposer_module_css_default.optionCopy,
-											children: (0, react_jsx_runtime.jsxs)("span", {
-												className: QuestionComposer_module_css_default.optionLine,
-												children: [
-													(0, react_jsx_runtime.jsx)("span", {
-														className: QuestionComposer_module_css_default.optionLabel,
-														children: display.label
-													}),
-													display.recommended && (0, react_jsx_runtime.jsx)("span", {
-														className: QuestionComposer_module_css_default.badge,
-														children: t("option.recommended")
-													}),
-													option.description !== void 0 && (0, react_jsx_runtime.jsx)("span", {
-														className: QuestionComposer_module_css_default.description,
-														children: option.description
-													})
-												]
-											})
-										})]
-									}, `${option.label}-${String(optionIndex)}`);
-								}), hasOptions ? (0, react_jsx_runtime.jsxs)("div", {
-									className: clsx(QuestionComposer_module_css_default.customRow, draft.custom !== "" && QuestionComposer_module_css_default.customRowActive),
+						})]
+					}), !minimized && (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [(0, react_jsx_runtime.jsxs)("div", {
+						className: QuestionComposer_module_css_default.body,
+						"data-question-scroll": true,
+						children: [question.detail !== void 0 && (0, react_jsx_runtime.jsx)("div", {
+							className: QuestionComposer_module_css_default.detail,
+							children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.MarkdownText, { text: question.detail })
+						}), (0, react_jsx_runtime.jsxs)("div", {
+							className: QuestionComposer_module_css_default.options,
+							role: question.multiSelect === true ? "group" : "radiogroup",
+							children: [(question.options ?? []).map((option, optionIndex) => {
+								const selected = draft.selected.includes(option.label);
+								const display = parseRecommendedLabel(option.label);
+								return (0, react_jsx_runtime.jsxs)("button", {
+									type: "button",
+									className: clsx(QuestionComposer_module_css_default.option, selected && question.multiSelect !== true && QuestionComposer_module_css_default.optionSelected),
+									role: question.multiSelect === true ? "checkbox" : "radio",
+									"aria-checked": selected,
+									"aria-label": display.label,
+									disabled: busy !== null,
+									onClick: () => {
+										choose(option.label);
+									},
+									onKeyDown: (event) => {
+										if (event.key !== "Enter" || !drafts.every(completed)) return;
+										event.preventDefault();
+										submitDrafts(drafts);
+									},
 									children: [question.multiSelect === true ? (0, react_jsx_runtime.jsx)("span", {
-										className: clsx(QuestionComposer_module_css_default.checkbox, draft.custom !== "" && QuestionComposer_module_css_default.checkboxChecked),
+										className: clsx(QuestionComposer_module_css_default.checkbox, selected && QuestionComposer_module_css_default.checkboxChecked),
 										"aria-hidden": "true",
-										children: draft.custom !== "" && (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCheckOutline14, { size: 12 })
+										children: selected && (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCheckOutline14, { size: 12 })
 									}) : (0, react_jsx_runtime.jsx)("span", {
 										className: QuestionComposer_module_css_default.number,
-										"aria-hidden": "true",
-										children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconEditOutline16, { size: 12 })
-									}), (0, react_jsx_runtime.jsx)("input", {
-										type: "text",
-										className: QuestionComposer_module_css_default.customInput,
-										value: draft.custom,
-										disabled: busy !== null,
-										placeholder: t("custom.placeholder"),
-										onChange: draftCustom,
-										onKeyDown: continueFromCustom
+										children: optionIndex + 1
+									}), (0, react_jsx_runtime.jsx)("span", {
+										className: QuestionComposer_module_css_default.optionCopy,
+										children: (0, react_jsx_runtime.jsxs)("span", {
+											className: QuestionComposer_module_css_default.optionLine,
+											children: [
+												(0, react_jsx_runtime.jsx)("span", {
+													className: QuestionComposer_module_css_default.optionLabel,
+													children: display.label
+												}),
+												display.recommended && (0, react_jsx_runtime.jsx)("span", {
+													className: QuestionComposer_module_css_default.badge,
+													children: t("option.recommended")
+												}),
+												option.description !== void 0 && (0, react_jsx_runtime.jsx)("span", {
+													className: QuestionComposer_module_css_default.description,
+													children: option.description
+												})
+											]
+										})
 									})]
-								}) : (0, react_jsx_runtime.jsx)("textarea", {
-									autoFocus: true,
-									className: QuestionComposer_module_css_default.customTextarea,
+								}, `${option.label}-${String(optionIndex)}`);
+							}), hasOptions ? (0, react_jsx_runtime.jsxs)("div", {
+								className: clsx(QuestionComposer_module_css_default.customRow, draft.custom !== "" && QuestionComposer_module_css_default.customRowActive),
+								children: [question.multiSelect === true ? (0, react_jsx_runtime.jsx)("span", {
+									className: clsx(QuestionComposer_module_css_default.checkbox, draft.custom !== "" && QuestionComposer_module_css_default.checkboxChecked),
+									"aria-hidden": "true",
+									children: draft.custom !== "" && (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCheckOutline14, { size: 12 })
+								}) : (0, react_jsx_runtime.jsx)("span", {
+									className: QuestionComposer_module_css_default.number,
+									"aria-hidden": "true",
+									children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconEditOutline16, { size: 12 })
+								}), (0, react_jsx_runtime.jsx)("input", {
+									type: "text",
+									className: QuestionComposer_module_css_default.customInput,
 									value: draft.custom,
 									disabled: busy !== null,
-									rows: 2,
 									placeholder: t("custom.placeholder"),
 									onChange: draftCustom,
 									onKeyDown: continueFromCustom
 								})]
+							}) : (0, react_jsx_runtime.jsx)("textarea", {
+								autoFocus: !focusedQuestions.current.has(index),
+								className: QuestionComposer_module_css_default.customTextarea,
+								value: draft.custom,
+								disabled: busy !== null,
+								rows: 2,
+								placeholder: t("custom.placeholder"),
+								onFocus: () => {
+									focusedQuestions.current.add(index);
+								},
+								onChange: draftCustom,
+								onKeyDown: continueFromCustom
 							})]
-						}),
-						(0, react_jsx_runtime.jsxs)("footer", {
-							className: QuestionComposer_module_css_default.footer,
-							children: [
-								(0, react_jsx_runtime.jsxs)("div", {
-									className: QuestionComposer_module_css_default.pager,
-									children: [
-										(0, react_jsx_runtime.jsx)("button", {
-											type: "button",
-											className: QuestionComposer_module_css_default.iconButton,
-											"aria-label": t("nav.prev"),
-											disabled: index === 0 || busy !== null,
-											onClick: () => {
-												setIndex(index - 1);
-												setError(null);
-											},
-											children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronLeftOutline14, {})
-										}),
-										(0, react_jsx_runtime.jsxs)("span", {
-											className: QuestionComposer_module_css_default.progress,
-											children: [
-												index + 1,
-												" / ",
-												questions.length
-											]
-										}),
-										(0, react_jsx_runtime.jsx)("button", {
-											type: "button",
-											className: QuestionComposer_module_css_default.iconButton,
-											"aria-label": t("nav.next"),
-											disabled: index === questions.length - 1 || busy !== null,
-											onClick: () => {
-												setIndex(index + 1);
-												setError(null);
-											},
-											children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronRightOutline14, {})
-										})
-									]
-								}),
-								(0, react_jsx_runtime.jsx)("div", {
-									className: QuestionComposer_module_css_default.feedback,
-									role: "status",
-									children: error === null ? null : "key" in error ? t(error.key) : error.text
-								}),
-								(0, react_jsx_runtime.jsxs)("div", {
-									className: QuestionComposer_module_css_default.footerActions,
-									children: [(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
-										variant: "outline",
-										disabled: busy !== null,
-										onClick: skipQuestion,
-										children: t("action.skip")
-									}), (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
-										variant: "primary",
-										disabled: busy !== null || !answered(draft),
-										onClick: continueFlow,
-										children: busy === "answer" ? t("submitting") : index === questions.length - 1 ? t("submit") : t("action.next")
-									})]
-								})
-							]
-						})
-					]
+						})]
+					}), (0, react_jsx_runtime.jsxs)("footer", {
+						className: QuestionComposer_module_css_default.footer,
+						children: [
+							(0, react_jsx_runtime.jsxs)("div", {
+								className: QuestionComposer_module_css_default.pager,
+								children: [
+									(0, react_jsx_runtime.jsx)("button", {
+										type: "button",
+										className: QuestionComposer_module_css_default.iconButton,
+										"aria-label": t("nav.prev"),
+										disabled: index === 0 || busy !== null,
+										onClick: () => {
+											setIndex(index - 1);
+											setError(null);
+										},
+										children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronLeftOutline14, {})
+									}),
+									(0, react_jsx_runtime.jsxs)("span", {
+										className: QuestionComposer_module_css_default.progress,
+										children: [
+											index + 1,
+											" / ",
+											questions.length
+										]
+									}),
+									(0, react_jsx_runtime.jsx)("button", {
+										type: "button",
+										className: QuestionComposer_module_css_default.iconButton,
+										"aria-label": t("nav.next"),
+										disabled: index === questions.length - 1 || busy !== null,
+										onClick: () => {
+											setIndex(index + 1);
+											setError(null);
+										},
+										children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronRightOutline14, {})
+									})
+								]
+							}),
+							(0, react_jsx_runtime.jsx)("div", {
+								className: QuestionComposer_module_css_default.feedback,
+								role: "status",
+								children: error === null ? null : "key" in error ? t(error.key) : error.text
+							}),
+							(0, react_jsx_runtime.jsxs)("div", {
+								className: QuestionComposer_module_css_default.footerActions,
+								children: [(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+									variant: "outline",
+									disabled: busy !== null,
+									onClick: skipQuestion,
+									children: t("action.skip")
+								}), (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+									variant: "primary",
+									disabled: busy !== null || !answered(draft),
+									onClick: continueFlow,
+									children: busy === "answer" ? t("submitting") : index === questions.length - 1 ? t("submit") : t("action.next")
+								})]
+							})
+						]
+					})] })]
 				})
 			});
 		}
@@ -615,6 +632,8 @@ window.__ModuleLoader__.load({
 			"error.unanswered": "请选择一个选项或填写自定义答案。",
 			"nav.prev": "上一题",
 			"nav.next": "下一题",
+			"nav.minimize": "收起问题卡片",
+			"nav.maximize": "展开问题卡片",
 			"nav.cancel": "放弃整组问题",
 			"option.recommended": "推荐",
 			"custom.placeholder": "输入你的答案",
@@ -631,6 +650,8 @@ window.__ModuleLoader__.load({
 			"error.unanswered": "Please select an option or enter a custom answer.",
 			"nav.prev": "Previous question",
 			"nav.next": "Next question",
+			"nav.minimize": "Collapse the question card",
+			"nav.maximize": "Expand the question card",
 			"nav.cancel": "Dismiss all questions",
 			"option.recommended": "Recommended",
 			"custom.placeholder": "Type your answer",

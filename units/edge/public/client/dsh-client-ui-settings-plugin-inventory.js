@@ -18,24 +18,24 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var PluginInventorySettingsTab_module_css_default = {
+			"card": "qSYn7G_card",
 			"cardContent": "qSYn7G_cardContent",
-			"visuallyHidden": "qSYn7G_visuallyHidden",
-			"configTag": "qSYn7G_configTag",
-			"search": "qSYn7G_search",
-			"catalogHeading": "qSYn7G_catalogHeading",
-			"cards": "qSYn7G_cards",
-			"chevron": "qSYn7G_chevron",
-			"cardTrailing": "qSYn7G_cardTrailing",
-			"status": "qSYn7G_status",
-			"section": "qSYn7G_section",
-			"catalog": "qSYn7G_catalog",
+			"cardDetails": "qSYn7G_cardDetails",
 			"cardTitle": "qSYn7G_cardTitle",
+			"cardTrailing": "qSYn7G_cardTrailing",
+			"cards": "qSYn7G_cards",
+			"catalog": "qSYn7G_catalog",
+			"catalogHeading": "qSYn7G_catalogHeading",
+			"chevron": "qSYn7G_chevron",
+			"configTag": "qSYn7G_configTag",
+			"details": "qSYn7G_details",
 			"entryValue": "qSYn7G_entryValue",
 			"failure": "qSYn7G_failure",
+			"search": "qSYn7G_search",
+			"section": "qSYn7G_section",
+			"status": "qSYn7G_status",
 			"statusDot": "qSYn7G_statusDot",
-			"cardDetails": "qSYn7G_cardDetails",
-			"details": "qSYn7G_details",
-			"card": "qSYn7G_card"
+			"visuallyHidden": "qSYn7G_visuallyHidden"
 		};
 		//#endregion
 		//#region lib/types/client/PluginInventorySettingsTab.js

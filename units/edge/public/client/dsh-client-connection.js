@@ -5061,11 +5061,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				details: object({ ns: string() })
 			}),
 			object({
-				code: literal("settings-not-exposed"),
-				message: string(),
-				details: object({ ns: string() })
-			}),
-			object({
 				code: literal("settings-conflict"),
 				message: string(),
 				details: object({
@@ -5365,6 +5360,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			maxImagesPerMessage: number().int().positive(),
 			maxMessageImageBytes: number().int().positive(),
 			maxImagePixels: number().int().positive(),
+			maxImageDimension: number().int().positive(),
 			mediaTypes: array(string())
 		});
 		/** session.history response value (projections rides the tail page only). */
@@ -5712,6 +5708,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			provider: string().optional(),
 			model: string().optional(),
 			attachedSessions: number().int().nonnegative(),
+			home: string(),
 			canOpenPath: boolean()
 		});
 		object({});
@@ -7089,7 +7086,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			toolTurn(67, "grep", "{\"pattern\":\"SEARCH_MAX_LINES\",\"path\":\"packages/client\"}", SEARCH_MATCHES_TEXT);
 			toolTurn(68, "glob", "{\"pattern\":\"**/SearchBlock*\",\"path\":\"packages/client\"}", SEARCH_PATHS_TEXT);
 			toolTurn(69, "read", `{"file_path":${JSON.stringify(READ_SAMPLE_PATH)},"offset":${READ_SAMPLE_FIRST_LINE}}`, READ_SAMPLE_TEXT);
-			toolTurn(70, "web_search", "{\"query\":\"deepseek harness architecture\"}", "Search results for deepseek harness architecture.");
+			toolTurn(70, "web_search", "{\"queries\":[\"deepseek harness architecture\"]}", "Search results for deepseek harness architecture.");
 			toolTurn(71, "web_fetch", "{\"url\":\"https://www.deepseek.com/blog/harness-architecture\"}", "# Harness architecture\n\nEverything is a plugin.");
 			push({
 				type: "turn/start",
@@ -7269,7 +7266,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				};
 				case "web_search": return {
 					card: "generic",
-					title: `Search ${str(args.query)}`,
+					title: `Search ${(Array.isArray(args.queries) ? args.queries.filter((query) => typeof query === "string" && query !== "") : []).join(", ")}`,
 					kind: "search",
 					rawInput: args
 				};
@@ -7362,29 +7359,37 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			}
 		}
 		/**
-		* Fixture parallel of the plan unit's double-event fold: `command/run`
-		* records named `plan` with recorded input set the wanted target (`off` →
-		* false, else true); `plan/mode` commits and clears it. `wanted` is exposed
-		* for the prompt boundary (the fixture's step/start parallel).
+		* Fixture parallel of the plan unit's lifecycle fold. The paired
+		* `command/done` retains successful plan selections and drops failures;
+		* `plan/mode` commits one. `wanted` is exposed for the prompt boundary (the
+		* fixture's step/start parallel).
 		*/
 		function foldPlan(log) {
 			let active = false;
 			let wanted = null;
+			let running = null;
 			for (const event of log) {
 				const item = event;
 				if (item.type === "command/run" && item.data?.["name"] === "plan") {
 					const args = item.data["args"];
 					if (typeof args !== "string") continue;
-					wanted = args.trim() !== "off";
+					running = {
+						commandId: item.data["commandId"],
+						wanted: args.trim() !== "off"
+					};
+				} else if (item.type === "command/done" && item.data !== void 0 && running !== null && item.data["commandId"] === running.commandId) {
+					wanted = item.data["kind"] === "success" && running.wanted !== active ? running.wanted : null;
+					running = null;
 				} else if (item.type === "plan/mode") {
 					active = item.data?.["active"] === true;
 					wanted = null;
 				}
 			}
+			const selected = running?.wanted ?? wanted;
 			return {
 				active,
-				pending: wanted !== null && wanted !== active,
-				wanted
+				pending: selected !== null && selected !== active,
+				wanted: selected
 			};
 		}
 		/** The plan projection's wire view over the full log. */
@@ -7624,6 +7629,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				maxImagesPerMessage: 20,
 				maxMessageImageBytes: 100 * 1024 * 1024,
 				maxImagePixels: 4e7,
+				maxImageDimension: 2e3,
 				mediaTypes: [
 					"image/png",
 					"image/jpeg",
@@ -7990,6 +7996,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			let attachedSessions = options.empty ? 0 : 1;
 			const wid = (raw) => raw;
 			const fixtureEpoch = (/* @__PURE__ */ new Date(Date.now() - 3e5)).toISOString();
+			const FIXTURE_HOME = "/home/fixture";
 			const workspaces = options.empty ? [] : [{
 				workspaceId: wid("fx-ws-fixture"),
 				path: "/tmp/fixture",
@@ -8001,10 +8008,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				],
 				createdAt: fixtureEpoch,
 				updatedAt: fixtureEpoch
+			}, {
+				workspaceId: wid("fx-ws-home"),
+				path: `${FIXTURE_HOME}/Documents/project`,
+				title: "project",
+				sessionIds: [],
+				createdAt: fixtureEpoch,
+				updatedAt: fixtureEpoch
 			}];
 			let nextWorkspace = 1;
 			const archivedSessionIds = [];
-			const FIXTURE_HOME = "/home/fixture";
 			const directoryTree = new Map([
 				["/", ["home"]],
 				["/home", ["fixture"]],
@@ -8232,7 +8245,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 							{
 								name: "goal",
 								description: "set or view the goal for a long-running task",
-								input: { hint: "<objective>" }
+								input: {
+									hint: "<objective>",
+									images: true
+								}
 							},
 							{
 								name: "permission",
@@ -8242,17 +8258,59 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 							{
 								name: "plan",
 								description: "Enter or leave plan mode",
-								input: { hint: "[off|message]" }
+								input: {
+									hint: "[off|message]",
+									images: true
+								}
 							}
 						]
 					};
 				},
-				execute(id, line) {
+				execute(id, line, images = []) {
 					const missing = requireGoalSession(id);
 					if (missing !== void 0) return missing;
 					const match = /^\/(\S+)((?:\s.*)?)$/.exec(line.trim());
 					const name = match?.[1];
 					const args = match?.[2] ?? "";
+					if (images.length > 0 && name !== void 0 && [
+						"permission",
+						"goal",
+						"compact",
+						"echo",
+						"plan"
+					].includes(name)) {
+						const rejection = name !== "goal" && name !== "plan" ? `/${name} does not accept image attachments` : name === "goal" && args.trim() === "" ? "Image attachments only accompany a goal objective: /goal <objective> or /goal edit <objective>." : name === "plan" && args.trim() === "off" ? "Image attachments cannot accompany /plan off." : void 0;
+						if (rejection !== void 0) {
+							const commandId = `fx-cmd-${logOf(id).length}`;
+							append(id, {
+								type: "command/run",
+								data: {
+									commandId,
+									name,
+									args,
+									source: { kind: "user" }
+								}
+							});
+							const result = {
+								kind: "error",
+								text: rejection
+							};
+							append(id, {
+								type: "command/done",
+								data: {
+									commandId,
+									...result
+								}
+							});
+							return {
+								ok: true,
+								value: {
+									commandId,
+									result
+								}
+							};
+						}
+					}
 					if (name === "permission") {
 						const preset = args.trim();
 						const commandId = `fx-cmd-${logOf(id).length}`;
@@ -8414,6 +8472,50 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				activation: projection.goal.phase === "active" ? "armed" : "disarmed"
 			});
 			/** Canonical fixture implementation of the generated Goal Remote contract. */
+			/** Canonical fixture implementation of the generated reference-discovery Remote contracts. */
+			const referenceRemotes = {
+				files(id, query) {
+					const missing = requireGoalSession(id);
+					if (missing !== void 0) return missing;
+					const needle = query.toLocaleLowerCase();
+					return {
+						ok: true,
+						value: [
+							{
+								path: "notes",
+								kind: "directory"
+							},
+							{
+								path: "README.md",
+								kind: "file"
+							},
+							{
+								path: "notes/demo.txt",
+								kind: "file"
+							}
+						].filter((item) => item.path.toLocaleLowerCase().includes(needle))
+					};
+				},
+				sessions(id, query) {
+					const missing = requireGoalSession(id);
+					if (missing !== void 0) return missing;
+					const needle = query.toLocaleLowerCase();
+					return {
+						ok: true,
+						value: sessions.filter((item) => item.sessionId !== id).filter((item) => String(item.sessionId).toLocaleLowerCase().includes(needle) || item.cwd?.toLocaleLowerCase().includes(needle) === true).map((item) => {
+							const label = item.sessionId === sid("fx-beta") ? "Fixture child session" : String(item.sessionId);
+							const encoded = btoa(JSON.stringify(item.sessionId)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
+							return {
+								sessionId: item.sessionId,
+								label,
+								...item.cwd === void 0 ? {} : { cwd: item.cwd },
+								createdAt: item.updatedAt,
+								mention: `@[${label}](dsh-session:${encoded})`
+							};
+						})
+					};
+				}
+			};
 			const goalRemotes = {
 				create(id, request) {
 					const missing = requireGoalSession(id);
@@ -9209,11 +9311,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 								message: `no session ${id}`,
 								details: { sessionId: id }
 							});
-							if (options.rejectPrompt) return err(request, {
-								code: "agent-busy",
-								message: "fixture: prompt rejected before acceptance",
-								details: { reason: "fixture-prompt-rejection" }
-							});
+							if (options.rejectPrompt) {
+								if (content.some((block) => block.type === "image")) return err(request, {
+									code: "attachment-error",
+									message: "fixture: image side exceeds the deployment limit",
+									details: { reason: "IMAGE_DIMENSION_TOO_LARGE" }
+								});
+								return err(request, {
+									code: "agent-busy",
+									message: "fixture: prompt rejected before acceptance",
+									details: { reason: "fixture-prompt-rejection" }
+								});
+							}
 							summary.updatedAt = Date.now();
 							summary.blank = false;
 							const userText = content.map((b) => b.type === "text" ? b.text : "").join("");
@@ -9324,6 +9433,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 							version: "0.0.0-fixture",
 							cwd: "/tmp/fixture",
 							attachedSessions,
+							home: FIXTURE_HOME,
 							canOpenPath: true
 						}),
 						pickDirectory: (request) => ok(request, { path: `${FIXTURE_HOME}/Documents/project` }),
@@ -9836,7 +9946,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 					const sessionId = args.agentId;
 					switch (endpoint) {
 						case "commands/list": return Promise.resolve(commandRemotes.list(sessionId));
-						case "commands/execute": return Promise.resolve(commandRemotes.execute(sessionId, args.line));
+						case "commands/execute": return Promise.resolve(commandRemotes.execute(sessionId, args.line, args.images ?? []));
+						case "fileReferences/list": return Promise.resolve(referenceRemotes.files(sessionId, args.query ?? ""));
+						case "sessionReferenceResolver/candidates": return Promise.resolve(referenceRemotes.sessions(sessionId, args.query ?? ""));
 						case "goals/create": return Promise.resolve(goalRemotes.create(sessionId, {
 							objective: args.request?.objective,
 							...args.request?.maxGoalRounds === void 0 ? {} : { maxGoalRounds: args.request.maxGoalRounds }

@@ -6,6 +6,7 @@ window.__ModuleLoader__.load({
 		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 		let react_jsx_runtime = require("react/jsx-runtime");
 		let react = require("react");
+		let react_dom = require("react-dom");
 		let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
 		//#region lib/types/client/controller.js
 		const INITIAL_VIEW = Object.freeze({
@@ -325,7 +326,7 @@ window.__ModuleLoader__.load({
 		};
 		//#endregion
 		//#region \0dsh-css:/home/runner/work/deepseek-harness/deepseek-harness/packages/client/ui-message-feedback/src/client/MessageFeedbackActions.module.css.mjs
-		const css = "._8_XoUG_action{width:28px;height:28px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:28px;justify-content:center;align-items:center;padding:6px;display:inline-flex}._8_XoUG_action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}._8_XoUG_action:disabled{cursor:default;opacity:.4}._8_XoUG_action[data-active]{color:var(--dsw-alias-label-primary)}._8_XoUG_noteOpen{max-width:220px;color:var(--dsw-alias-label-tertiary);white-space:nowrap;text-overflow:ellipsis;cursor:pointer;background:0 0;border:none;border-radius:14px;padding:0 8px;font-size:13px;line-height:28px;overflow:hidden}._8_XoUG_noteOpen:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}._8_XoUG_noteEditor{align-items:flex-start;gap:6px;display:inline-flex}._8_XoUG_noteInput{border:1px solid var(--dsw-alias-border-secondary);background:var(--dsw-alias-bg-primary);width:260px;color:var(--dsw-alias-label-primary);font:inherit;resize:vertical;border-radius:8px;padding:6px 8px;font-size:13px}._8_XoUG_noteSave,._8_XoUG_noteCancel{cursor:pointer;border:none;border-radius:14px;height:28px;padding:0 10px;font-size:13px}._8_XoUG_noteSave{background:var(--dsw-alias-interactive-bg-primary);color:var(--dsw-alias-label-inverse)}._8_XoUG_noteSave:disabled{cursor:default;opacity:.4}._8_XoUG_noteCancel{color:var(--dsw-alias-label-tertiary);background:0 0}._8_XoUG_noteCancel:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}._8_XoUG_failure{color:var(--dsw-alias-label-tertiary);padding-left:4px;font-size:13px;line-height:28px}";
+		const css = "._8_XoUG_action{width:28px;height:28px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:28px;justify-content:center;align-items:center;padding:6px;display:inline-flex}._8_XoUG_action:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}._8_XoUG_action:disabled{cursor:default;opacity:.4}._8_XoUG_action[data-active]{color:var(--dsw-alias-label-primary)}._8_XoUG_noteOpen{max-width:220px;color:var(--dsw-alias-label-tertiary);white-space:nowrap;text-overflow:ellipsis;cursor:pointer;background:0 0;border:none;border-radius:14px;padding:0 8px;font-size:13px;line-height:28px;overflow:hidden}._8_XoUG_noteOpen:hover,._8_XoUG_noteOpen[aria-expanded=true]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}._8_XoUG_notePanel{z-index:1100;box-sizing:border-box;border:1px solid var(--dsw-alias-border-inverted);background:var(--dsw-specific-menu);width:320px;max-width:min(360px,100vw - 24px);max-height:calc(100vh - 24px);box-shadow:var(--dsw-shadow-lv3);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2);border-radius:12px;flex-direction:column;gap:8px;padding:8px;display:flex;position:fixed;overflow-y:auto}._8_XoUG_noteInput{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);width:100%;color:var(--dsw-alias-label-primary);font:inherit;resize:vertical;border-radius:8px;padding:6px 8px;font-size:13px}._8_XoUG_noteActions{justify-content:flex-end;gap:6px;display:flex}._8_XoUG_noteSave,._8_XoUG_noteCancel{cursor:pointer;border:none;border-radius:14px;height:28px;padding:0 10px;font-size:13px}._8_XoUG_noteSave{background:var(--dsw-alias-button-primary-fill);color:var(--dsw-alias-label-primary-foreground)}._8_XoUG_noteSave:hover:not(:disabled){background:var(--dsw-alias-button-primary-hover)}._8_XoUG_noteSave:disabled{cursor:default;opacity:.4}._8_XoUG_noteCancel{color:var(--dsw-alias-label-tertiary);background:0 0}._8_XoUG_noteCancel:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}._8_XoUG_failure{color:var(--dsw-alias-label-tertiary);padding-left:4px;font-size:13px;line-height:20px}";
 		const tagId = "@deepseek-ai/dsh-client-ui-message-feedback/MessageFeedbackActions.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
 			const tag = document.createElement("style");
@@ -335,27 +336,49 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var MessageFeedbackActions_module_css_default = {
-			"noteSave": "_8_XoUG_noteSave",
-			"noteInput": "_8_XoUG_noteInput",
-			"noteCancel": "_8_XoUG_noteCancel",
 			"action": "_8_XoUG_action",
-			"noteOpen": "_8_XoUG_noteOpen",
 			"failure": "_8_XoUG_failure",
-			"noteEditor": "_8_XoUG_noteEditor"
+			"noteActions": "_8_XoUG_noteActions",
+			"noteCancel": "_8_XoUG_noteCancel",
+			"noteInput": "_8_XoUG_noteInput",
+			"noteOpen": "_8_XoUG_noteOpen",
+			"notePanel": "_8_XoUG_notePanel",
+			"noteSave": "_8_XoUG_noteSave"
 		};
 		//#endregion
 		//#region lib/types/client/MessageFeedbackActions.js
 		/**
 		* Per-message feedback controls: a Like/Dislike pair plus an optional note.
-		* Rendered inside the assistant message's IconActions row, so the buttons
-		* reuse that row's chrome and sit between copy and branch.
+		* The buttons render inside the assistant message's IconActions row, so they
+		* reuse that row's chrome and sit between copy and branch. The note editor is
+		* a popover (portaled to `document.body`) anchored to the note trigger, not an
+		* inline expansion: a 260px textarea plus buttons cannot fit the row at any
+		* viewport, and an inline element pushed the branch action and clock out of the
+		* conversation column. Portaling out of the column also escapes its `overflow`
+		* clip, so the panel cannot be cropped or detached from the message it annotates.
 		* @module @deepseek-ai/dsh-client-ui-message-feedback/client/MessageFeedbackActions
 		*/
+		/** Safe distance kept between the panel and the viewport edges (the Menu portal margin). */
+		const PANEL_MARGIN = 12;
+		/** Distance between the trigger's bottom edge and the panel's top. */
+		const PANEL_GAP = 4;
+		/**
+		* Unplaced portal panel: hidden but laid out so `offsetWidth` is real for the
+		* clamp. The explicit insets match `Menu`'s measure style — a `position: fixed`
+		* element with auto insets otherwise sits at its static position, a different
+		* origin than the one the first placement measures from.
+		*/
+		const MEASURE_STYLE = {
+			visibility: "hidden",
+			left: 0,
+			top: 0
+		};
 		/**
 		* One message's feedback controls.
 		* @param props - the owner's message identity, the injected verbs, and the
 		* shared feedback hook.
-		* @returns the rating buttons, plus the note editor while it is open.
+		* @returns the rating buttons and the note trigger, with the note editor
+		* portal-open beneath the trigger while it is open.
 		*/
 		function MessageFeedbackActions({ messageId, ensure, rate, toggle, clearNote, useFeedback, t }) {
 			const item = useFeedback((view) => view.items.get(messageId));
@@ -364,7 +387,11 @@ window.__ModuleLoader__.load({
 			const [noteOpen, setNoteOpen] = (0, react.useState)(false);
 			const [draft, setDraft] = (0, react.useState)("");
 			const [pending, setPending] = (0, react.useState)(false);
-			const [failure, setFailure] = (0, react.useState)(null);
+			const [rowFailure, setRowFailure] = (0, react.useState)(null);
+			const [noteFailure, setNoteFailure] = (0, react.useState)(null);
+			const triggerRef = (0, react.useRef)(null);
+			const panelRef = (0, react.useRef)(null);
+			const inputRef = (0, react.useRef)(null);
 			const seeded = (0, react.useRef)(false);
 			const seed = (0, react.useCallback)(() => {
 				if (seeded.current) return;
@@ -375,44 +402,113 @@ window.__ModuleLoader__.load({
 			(0, react.useEffect)(() => () => {
 				alive.current = false;
 			}, []);
-			const settle = (0, react.useCallback)((result) => {
+			/** Bumped whenever an editing session ends, so a late save can tell it is stale. */
+			const noteGeneration = (0, react.useRef)(0);
+			/** Current panel open-state, readable from a stale closure via a ref. */
+			const noteOpenRef = (0, react.useRef)(false);
+			(0, react.useEffect)(() => {
+				noteOpenRef.current = noteOpen;
+			}, [noteOpen]);
+			const errorCopy = (0, react.useCallback)((result) => {
+				return result.error?.code === "version-conflict" ? t("error.conflict") : t("error.generic");
+			}, [t]);
+			const settleRating = (0, react.useCallback)((result) => {
 				if (!alive.current) return;
 				setPending(false);
-				if (result.ok) {
-					setFailure(null);
-					return;
-				}
-				setFailure(result.error?.code === "version-conflict" ? t("error.conflict") : t("error.generic"));
-			}, [t]);
+				setRowFailure(result.ok ? null : errorCopy(result));
+			}, [errorCopy]);
+			const closeNote = (0, react.useCallback)(() => {
+				noteGeneration.current += 1;
+				setNoteOpen(false);
+			}, []);
 			const onRate = (0, react.useCallback)((next) => {
 				setPending(true);
-				setFailure(null);
-				setNoteOpen(false);
-				toggle(messageId, next).then(settle);
+				setRowFailure(null);
+				closeNote();
+				toggle(messageId, next).then(settleRating);
 			}, [
+				closeNote,
 				messageId,
-				settle,
+				settleRating,
 				toggle
 			]);
 			const onSaveNote = (0, react.useCallback)((current) => {
 				const trimmed = draft.trim();
 				setPending(true);
-				setFailure(null);
+				setNoteFailure(null);
+				const generation = noteGeneration.current;
+				const staleSeed = item?.note ?? "";
 				(trimmed.length === 0 ? clearNote(messageId) : rate(messageId, current, trimmed)).then((result) => {
-					settle(result);
-					if (result.ok && alive.current) setNoteOpen(false);
+					if (!alive.current) return;
+					setPending(false);
+					if (result.ok) {
+						if (generation === noteGeneration.current) {
+							setNoteFailure(null);
+							setNoteOpen(false);
+							return;
+						}
+						setDraft((draftNow) => draftNow === staleSeed ? trimmed : draftNow);
+						return;
+					}
+					if (generation === noteGeneration.current || !noteOpenRef.current) setNoteFailure(errorCopy(result));
 				});
 			}, [
 				clearNote,
 				draft,
+				errorCopy,
+				item?.note,
 				messageId,
-				rate,
-				settle
+				noteOpenRef,
+				rate
 			]);
-			const openNote = (0, react.useCallback)(() => {
+			const toggleNote = (0, react.useCallback)(() => {
+				if (noteOpen) {
+					closeNote();
+					return;
+				}
 				setDraft(item?.note ?? "");
+				setNoteFailure(null);
 				setNoteOpen(true);
-			}, [item?.note]);
+			}, [
+				noteOpen,
+				closeNote,
+				item?.note
+			]);
+			const pos = (0, _deepseek_ai_dsh_client_ui_primitives.useAnchoredPosition)({
+				open: noteOpen,
+				anchorRef: triggerRef,
+				panelRef,
+				gap: PANEL_GAP,
+				margin: PANEL_MARGIN
+			});
+			(0, react.useEffect)(() => {
+				if (!noteOpen) return;
+				inputRef.current?.focus();
+				const onPointerDown = (e) => {
+					if (!(e.target instanceof Node)) return;
+					if (triggerRef.current?.contains(e.target) === true) return;
+					if (panelRef.current?.contains(e.target) === true) return;
+					closeNote();
+				};
+				const onKeyDown = (e) => {
+					if (e.key === "Escape") closeNote();
+				};
+				document.addEventListener("pointerdown", onPointerDown);
+				document.addEventListener("keydown", onKeyDown);
+				return () => {
+					document.removeEventListener("pointerdown", onPointerDown);
+					document.removeEventListener("keydown", onKeyDown);
+				};
+			}, [noteOpen, closeNote]);
+			const wasOpen = (0, react.useRef)(false);
+			(0, react.useEffect)(() => {
+				if (noteOpen) {
+					wasOpen.current = true;
+					return;
+				}
+				if (wasOpen.current) triggerRef.current?.focus();
+				wasOpen.current = false;
+			}, [noteOpen]);
 			const likeLabel = rating === "positive" ? t("action.likeActive") : t("action.like");
 			const dislikeLabel = rating === "negative" ? t("action.dislikeActive") : t("action.dislike");
 			return (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
@@ -452,54 +548,72 @@ window.__ModuleLoader__.load({
 						children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconDislikeOutline16, {})
 					})
 				}),
-				rating !== void 0 && !noteOpen && (0, react_jsx_runtime.jsx)("button", {
+				rating !== void 0 && (0, react_jsx_runtime.jsx)("button", {
+					ref: triggerRef,
 					type: "button",
 					className: MessageFeedbackActions_module_css_default.noteOpen,
-					onClick: openNote,
+					"aria-haspopup": "dialog",
+					"aria-expanded": noteOpen,
+					onClick: toggleNote,
 					children: item?.note === void 0 ? t("note.open") : item.note
 				}),
-				rating !== void 0 && noteOpen && (0, react_jsx_runtime.jsxs)("span", {
-					className: MessageFeedbackActions_module_css_default.noteEditor,
-					children: [
-						(0, react_jsx_runtime.jsx)("textarea", {
-							className: MessageFeedbackActions_module_css_default.noteInput,
-							"aria-label": t("note.aria"),
-							placeholder: t("note.placeholder"),
-							value: draft,
-							rows: 2,
-							onChange: (event) => {
-								setDraft(event.target.value);
-							}
-						}),
-						(0, react_jsx_runtime.jsx)("button", {
-							type: "button",
-							className: MessageFeedbackActions_module_css_default.noteSave,
-							disabled: pending,
-							onClick: () => {
-								onSaveNote(rating);
-							},
-							children: t("note.save")
-						}),
-						(0, react_jsx_runtime.jsx)("button", {
-							type: "button",
-							className: MessageFeedbackActions_module_css_default.noteCancel,
-							onClick: () => {
-								setNoteOpen(false);
-							},
-							children: t("note.cancel")
-						})
-					]
-				}),
-				failure === null && loadFailed && (0, react_jsx_runtime.jsx)("span", {
+				rowFailure === null && loadFailed && (0, react_jsx_runtime.jsx)("span", {
 					className: MessageFeedbackActions_module_css_default.failure,
 					role: "status",
 					children: t("error.load")
 				}),
-				failure !== null && (0, react_jsx_runtime.jsx)("span", {
+				rowFailure !== null && (0, react_jsx_runtime.jsx)("span", {
 					className: MessageFeedbackActions_module_css_default.failure,
 					role: "status",
-					children: failure
-				})
+					children: rowFailure
+				}),
+				!(rating !== void 0 && noteOpen) && noteFailure !== null && (0, react_jsx_runtime.jsx)("span", {
+					className: MessageFeedbackActions_module_css_default.failure,
+					role: "status",
+					children: noteFailure
+				}),
+				rating !== void 0 && noteOpen && (0, react_dom.createPortal)((0, react_jsx_runtime.jsxs)("div", {
+					ref: panelRef,
+					className: MessageFeedbackActions_module_css_default.notePanel,
+					role: "dialog",
+					"aria-label": t("note.dialog"),
+					style: pos ?? MEASURE_STYLE,
+					children: [
+						(0, react_jsx_runtime.jsx)("textarea", {
+							ref: inputRef,
+							className: MessageFeedbackActions_module_css_default.noteInput,
+							"aria-label": t("note.aria"),
+							placeholder: t("note.placeholder"),
+							value: draft,
+							rows: 3,
+							onChange: (event) => {
+								setDraft(event.target.value);
+							}
+						}),
+						(0, react_jsx_runtime.jsxs)("div", {
+							className: MessageFeedbackActions_module_css_default.noteActions,
+							children: [(0, react_jsx_runtime.jsx)("button", {
+								type: "button",
+								className: MessageFeedbackActions_module_css_default.noteSave,
+								disabled: pending,
+								onClick: () => {
+									onSaveNote(rating);
+								},
+								children: t("note.save")
+							}), (0, react_jsx_runtime.jsx)("button", {
+								type: "button",
+								className: MessageFeedbackActions_module_css_default.noteCancel,
+								onClick: closeNote,
+								children: t("note.cancel")
+							})]
+						}),
+						noteFailure !== null && (0, react_jsx_runtime.jsx)("span", {
+							className: MessageFeedbackActions_module_css_default.failure,
+							role: "status",
+							children: noteFailure
+						})
+					]
+				}), document.body)
 			] });
 		}
 		//#endregion
@@ -512,6 +626,7 @@ window.__ModuleLoader__.load({
 			"action.dislike": "有问题的回答",
 			"action.dislikeActive": "取消标记",
 			"note.open": "补充说明",
+			"note.dialog": "反馈",
 			"note.placeholder": "这条回答哪里好，或哪里有问题？（可选）",
 			"note.save": "保存",
 			"note.cancel": "取消",
@@ -527,6 +642,7 @@ window.__ModuleLoader__.load({
 			"action.dislike": "Bad response",
 			"action.dislikeActive": "Remove rating",
 			"note.open": "Add a note",
+			"note.dialog": "Feedback",
 			"note.placeholder": "What was good, or what went wrong? (optional)",
 			"note.save": "Save",
 			"note.cancel": "Cancel",

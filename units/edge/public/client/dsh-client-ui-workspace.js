@@ -341,40 +341,40 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var Rows_module_css_default = {
-			"hoverTitle": "YDXeBa_hoverTitle",
-			"title": "YDXeBa_title",
-			"hoverContent": "YDXeBa_hoverContent",
-			"dropAfter": "YDXeBa_dropAfter",
-			"renameInput": "YDXeBa_renameInput",
-			"dot": "YDXeBa_dot",
-			"hoverTime": "YDXeBa_hoverTime",
-			"iconButton": "YDXeBa_iconButton",
-			"flatSessionRowWithoutStatus": "YDXeBa_flatSessionRowWithoutStatus",
-			"row-in": "YDXeBa_row-in",
-			"folder": "YDXeBa_folder",
-			"menuOpen": "YDXeBa_menuOpen",
-			"selected": "YDXeBa_selected",
-			"searchResultHeading": "YDXeBa_searchResultHeading",
-			"searchResultWorkspace": "YDXeBa_searchResultWorkspace",
-			"visuallyHidden": "YDXeBa_visuallyHidden",
-			"projectRow": "YDXeBa_projectRow",
-			"hoverStatus": "YDXeBa_hoverStatus",
-			"arrowOpen": "YDXeBa_arrowOpen",
-			"rowActions": "YDXeBa_rowActions",
-			"chevron": "YDXeBa_chevron",
 			"arrow": "YDXeBa_arrow",
-			"searchResultTitle": "YDXeBa_searchResultTitle",
-			"searchResultMeta": "YDXeBa_searchResultMeta",
-			"slot": "YDXeBa_slot",
-			"folderActive": "YDXeBa_folderActive",
-			"time": "YDXeBa_time",
-			"sessionRow": "YDXeBa_sessionRow",
-			"meta": "YDXeBa_meta",
+			"arrowOpen": "YDXeBa_arrowOpen",
+			"chevron": "YDXeBa_chevron",
+			"dot": "YDXeBa_dot",
+			"dropAfter": "YDXeBa_dropAfter",
 			"dropBefore": "YDXeBa_dropBefore",
-			"searchResultSnippet": "YDXeBa_searchResultSnippet",
-			"projectText": "YDXeBa_projectText",
+			"flatSessionRowWithoutStatus": "YDXeBa_flatSessionRowWithoutStatus",
+			"folder": "YDXeBa_folder",
+			"folderActive": "YDXeBa_folderActive",
+			"hoverContent": "YDXeBa_hoverContent",
 			"hoverPath": "YDXeBa_hoverPath",
-			"searchResultRow": "YDXeBa_searchResultRow"
+			"hoverStatus": "YDXeBa_hoverStatus",
+			"hoverTime": "YDXeBa_hoverTime",
+			"hoverTitle": "YDXeBa_hoverTitle",
+			"iconButton": "YDXeBa_iconButton",
+			"menuOpen": "YDXeBa_menuOpen",
+			"meta": "YDXeBa_meta",
+			"projectRow": "YDXeBa_projectRow",
+			"projectText": "YDXeBa_projectText",
+			"renameInput": "YDXeBa_renameInput",
+			"row-in": "YDXeBa_row-in",
+			"rowActions": "YDXeBa_rowActions",
+			"searchResultHeading": "YDXeBa_searchResultHeading",
+			"searchResultMeta": "YDXeBa_searchResultMeta",
+			"searchResultRow": "YDXeBa_searchResultRow",
+			"searchResultSnippet": "YDXeBa_searchResultSnippet",
+			"searchResultTitle": "YDXeBa_searchResultTitle",
+			"searchResultWorkspace": "YDXeBa_searchResultWorkspace",
+			"selected": "YDXeBa_selected",
+			"sessionRow": "YDXeBa_sessionRow",
+			"slot": "YDXeBa_slot",
+			"time": "YDXeBa_time",
+			"title": "YDXeBa_title",
+			"visuallyHidden": "YDXeBa_visuallyHidden"
 		};
 		//#endregion
 		//#region lib/types/client/rows/Rows.js
@@ -413,7 +413,7 @@ window.__ModuleLoader__.load({
 				d: d.getDate()
 			})} ${pad2(d.getHours())}:${pad2(d.getMinutes())}` });
 		}
-		/** Hover-card body: workspace title, full directory path, absolute creation time. */
+		/** Hover-card body: workspace title, display directory path, absolute creation time. */
 		function WorkspaceHoverContent({ label, cwd, createdAt, t }) {
 			return (0, react_jsx_runtime.jsxs)("div", {
 				className: Rows_module_css_default.hoverContent,
@@ -447,10 +447,11 @@ window.__ModuleLoader__.load({
 		* @param props.onToggle - expand/collapse the group.
 		* @param props.onCreate - start a frontend Session inside this Workspace.
 		* @param props.drag - optional workspace-row drag wiring.
+		* @param props.home - host account home for POSIX hover-path abbreviation.
 		* @param props.t - the browser root's locale seat.
 		* @returns the row element.
 		*/
-		function ProjectRowItem({ group, onToggle, onCreate, actions, drag, t }) {
+		function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home, t }) {
 			const row = group;
 			const label = row.workspaceId === void 0 ? t("group.ungrouped") : row.label;
 			const active = group.expanded && group.containsCurrent;
@@ -538,7 +539,7 @@ window.__ModuleLoader__.load({
 				anchor: ownRow,
 				content: (0, react_jsx_runtime.jsx)(WorkspaceHoverContent, {
 					label: row.label,
-					cwd: row.cwd,
+					cwd: row.cwd === void 0 ? void 0 : (0, _deepseek_ai_dsh_client_runtime_client.abbreviateHomePath)(row.cwd, home),
 					createdAt: row.createdAt,
 					t
 				}),
@@ -805,8 +806,8 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var WorkspacePicker_module_css_default = {
-			"modalAction": "_G5b-a_modalAction",
 			"menuStatus": "_G5b-a_menuStatus",
+			"modalAction": "_G5b-a_modalAction",
 			"modalError": "_G5b-a_modalError"
 		};
 		//#endregion
@@ -975,42 +976,42 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var WorkspaceBrowser_module_css_default = {
-			"wide-in": "qDHVXG_wide-in",
-			"searchWarning": "qDHVXG_searchWarning",
-			"empty": "qDHVXG_empty",
-			"deleteStatus": "qDHVXG_deleteStatus",
-			"search": "qDHVXG_search",
-			"fade": "qDHVXG_fade",
-			"workspaceDropAfter": "qDHVXG_workspaceDropAfter",
-			"searchSlot": "qDHVXG_searchSlot",
-			"rail": "qDHVXG_rail",
-			"searchSlotExpanded": "qDHVXG_searchSlotExpanded",
-			"searchButton": "qDHVXG_searchButton",
-			"workspaceDropBefore": "qDHVXG_workspaceDropBefore",
-			"deleteAction": "qDHVXG_deleteAction",
-			"root": "qDHVXG_root",
 			"clearButton": "qDHVXG_clearButton",
-			"listTopDropIndicator": "qDHVXG_listTopDropIndicator",
-			"listTopDropActive": "qDHVXG_listTopDropActive",
-			"headerActions": "qDHVXG_headerActions",
-			"searchStatus": "qDHVXG_searchStatus",
-			"sectionLabelHidden": "qDHVXG_sectionLabelHidden",
-			"searchInput": "qDHVXG_searchInput",
-			"listArea": "qDHVXG_listArea",
-			"searchExpanded": "qDHVXG_searchExpanded",
-			"list": "qDHVXG_list",
-			"iconButton": "qDHVXG_iconButton",
-			"sectionLabel": "qDHVXG_sectionLabel",
+			"deleteAction": "qDHVXG_deleteAction",
+			"deleteStatus": "qDHVXG_deleteStatus",
+			"empty": "qDHVXG_empty",
+			"fade": "qDHVXG_fade",
+			"flatList": "qDHVXG_flatList",
 			"groupSection": "qDHVXG_groupSection",
+			"headerActions": "qDHVXG_headerActions",
+			"headerActionsHidden": "qDHVXG_headerActionsHidden",
+			"iconButton": "qDHVXG_iconButton",
+			"list": "qDHVXG_list",
+			"listArea": "qDHVXG_listArea",
+			"listTopDropActive": "qDHVXG_listTopDropActive",
+			"listTopDropIndicator": "qDHVXG_listTopDropIndicator",
+			"rail": "qDHVXG_rail",
+			"renameError": "qDHVXG_renameError",
 			"renameInput": "qDHVXG_renameInput",
+			"root": "qDHVXG_root",
+			"search": "qDHVXG_search",
+			"searchButton": "qDHVXG_searchButton",
+			"searchExpanded": "qDHVXG_searchExpanded",
+			"searchInput": "qDHVXG_searchInput",
+			"searchSlot": "qDHVXG_searchSlot",
+			"searchSlotExpanded": "qDHVXG_searchSlotExpanded",
+			"searchStatus": "qDHVXG_searchStatus",
+			"searchTree": "qDHVXG_searchTree",
+			"searchWarning": "qDHVXG_searchWarning",
+			"sectionHeader": "qDHVXG_sectionHeader",
+			"sectionLabel": "qDHVXG_sectionLabel",
+			"sectionLabelHidden": "qDHVXG_sectionLabelHidden",
 			"sessionOverflowButton": "qDHVXG_sessionOverflowButton",
 			"treeBody": "qDHVXG_treeBody",
 			"wide": "qDHVXG_wide",
-			"flatList": "qDHVXG_flatList",
-			"searchTree": "qDHVXG_searchTree",
-			"sectionHeader": "qDHVXG_sectionHeader",
-			"headerActionsHidden": "qDHVXG_headerActionsHidden",
-			"renameError": "qDHVXG_renameError"
+			"wide-in": "qDHVXG_wide-in",
+			"workspaceDropAfter": "qDHVXG_workspaceDropAfter",
+			"workspaceDropBefore": "qDHVXG_workspaceDropBefore"
 		};
 		//#endregion
 		//#region lib/types/client/WorkspaceBrowser.js
@@ -1196,7 +1197,7 @@ window.__ModuleLoader__.load({
 			return e.clientY < rect.top + rect.height / 2 ? "before" : "after";
 		}
 		/** The scrolling session tree; unmounting drops the sessions subscription and expand-all state. */
-		function SessionTree({ useSessions, startSession, open, forkSession, workspaces, archivedSessionIds, onRenameRequest, onDeleteRequest, onSessionRename, onSessionArchive, insertWorkspaceBefore, insertSessionBefore, orderBy, groupExpansion, setGroupExpanded, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t }) {
+		function SessionTree({ useSessions, startSession, open, forkSession, workspaces, archivedSessionIds, onRenameRequest, onDeleteRequest, onSessionRename, onSessionArchive, insertWorkspaceBefore, insertSessionBefore, orderBy, groupExpansion, setGroupExpanded, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, home, t }) {
 			const list = useSessions((s) => s);
 			const current = list.current;
 			const [expandedSessionGroups, setExpandedSessionGroups] = (0, react.useState)([]);
@@ -1376,6 +1377,7 @@ window.__ModuleLoader__.load({
 								children: [
 									(0, react_jsx_runtime.jsx)(ProjectRowItem, {
 										group,
+										home,
 										t,
 										onToggle: () => {
 											if (group.expanded) setExpandedSessionGroups((keys) => keys.filter((key) => key !== group.key));
@@ -1644,7 +1646,8 @@ window.__ModuleLoader__.load({
 		* @param props - composed slot props (shell owner share + store + injected actions).
 		* @returns the region element tree.
 		*/
-		function WorkspaceBrowser({ wide, expandSidebar, useSessions, useWorkspaces, useStore, actions, startSession, open, renameSession, forkSession, renameWorkspace, deleteWorkspace, insertWorkspaceBefore, archiveSession, insertSessionBefore, createWorkspace, searchSessions, searchResultLimit, useDirectoryFlow, renderSlot, t }) {
+		function WorkspaceBrowser({ wide, expandSidebar, useSessions, useWorkspaces, useStore, actions, startSession, open, renameSession, forkSession, renameWorkspace, deleteWorkspace, insertWorkspaceBefore, archiveSession, insertSessionBefore, createWorkspace, searchSessions, searchResultLimit, useDirectoryFlow, useHostDescription, renderSlot, t }) {
+			const home = useHostDescription((description) => description?.home);
 			const workspaces = useWorkspaces((state) => state.items);
 			const workspacePhase = useWorkspaces((state) => state.phase);
 			const archivedSessionIds = useWorkspaces((state) => state.archivedSessionIds);
@@ -1701,7 +1704,7 @@ window.__ModuleLoader__.load({
 				searchOnExpand
 			]);
 			(0, react.useEffect)(() => {
-				if (!wide || !searchExpanded) return;
+				if (!wide || !searchExpanded || searchOnExpand) return;
 				const onClick = (event) => {
 					if (!(event.target instanceof Node) || searchRoot.current?.contains(event.target) === true) return;
 					searchInput.current?.blur();
@@ -1715,7 +1718,8 @@ window.__ModuleLoader__.load({
 			}, [
 				normalizedQuery,
 				wide,
-				searchExpanded
+				searchExpanded,
+				searchOnExpand
 			]);
 			(0, react.useEffect)(() => {
 				if (normalizedQuery === "") {
@@ -2022,6 +2026,7 @@ window.__ModuleLoader__.load({
 							insertWorkspaceBefore,
 							insertSessionBefore,
 							orderBy,
+							home,
 							t,
 							onRenameRequest: (workspaceId, currentTitle) => {
 								setRenameTarget({
@@ -2326,7 +2331,8 @@ window.__ModuleLoader__.load({
 			"slots",
 			"sessions",
 			"workspaces",
-			"locale"
+			"locale",
+			"connection"
 		];
 		/**
 		* Register the browser and picker once their slot declarations are on the
@@ -2335,6 +2341,7 @@ window.__ModuleLoader__.load({
 		* @param ctx - client root context.
 		*/
 		function apply(ctx) {
+			const hostDescription = ctx.get("connection").hostDescription;
 			ctx.effect(() => ctx.locale.register(NS, {
 				zh,
 				en
@@ -2389,7 +2396,10 @@ window.__ModuleLoader__.load({
 					await ctx.workspaces.insertSessionBefore(workspaceId, sessionId, beforeSessionId);
 				},
 				createWorkspace: (input) => ctx.workspaces.create(input),
-				hooks: { directoryFlow: browserFlowSource }
+				hooks: {
+					directoryFlow: browserFlowSource,
+					hostDescription
+				}
 			});
 			const pickerInjected = () => ({
 				createWorkspace: (input) => ctx.workspaces.create(input),

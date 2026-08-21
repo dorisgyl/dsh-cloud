@@ -5,7 +5,6 @@ window.__ModuleLoader__.load({
 		var exports = module.exports;
 		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 		let _deepseek_ai_dsh_client_ui_slots = require("@deepseek-ai/dsh-client-ui-slots");
-		let _deepseek_ai_dsh_client_web_react = require("@deepseek-ai/dsh-client-web-react");
 		let react_jsx_runtime = require("react/jsx-runtime");
 		let react = require("react");
 		let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
@@ -26,7 +25,7 @@ window.__ModuleLoader__.load({
 		}
 		//#endregion
 		//#region \0dsh-css:/home/runner/work/deepseek-harness/deepseek-harness/packages/client/ui-settings-general/src/client/SettingsRoot.module.css.mjs
-		const css$3 = ".VOzbGW_trigger{box-sizing:border-box;cursor:pointer;width:calc(100% + 8px);height:34px;color:var(--dsw-alias-label-primary);background:0 0;border:none;border-radius:12px;flex:none;align-items:center;gap:8px;margin:4px -4px;padding:6px 2px 6px 10px;font-family:inherit;font-size:14px;line-height:22px;display:flex;overflow:hidden}.VOzbGW_trigger:hover{background:var(--dsw-alias-interactive-bg-hover)}.VOzbGW_trigger.VOzbGW_rail{border-radius:50%;justify-content:center;gap:0;width:36px;height:36px;margin:8px 0 10px;padding:0}.VOzbGW_triggerLabel{white-space:nowrap;overflow:hidden}.VOzbGW_overlay{z-index:1000;justify-content:center;align-items:center;display:flex;position:fixed;inset:0}.VOzbGW_mask{background:var(--dsw-alias-bg-mask-1);backdrop-filter:var(--dsw-mask-blur);position:absolute;inset:0}.VOzbGW_panel{z-index:1;background:var(--dsw-alias-bg-layer-2);width:800px;max-width:calc(100vw - 48px);height:min(800px,100vh - 48px);box-shadow:var(--dsw-shadow-lv3);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2);border-radius:24px;display:flex;position:relative;overflow:hidden}.VOzbGW_nav{box-sizing:border-box;flex-direction:column;flex:none;gap:18px;width:188px;padding:22px 12px 0;display:flex}.VOzbGW_navTitle{color:var(--dsw-alias-label-primary);padding:0 12px;font-size:16px;font-weight:500;line-height:24px}.VOzbGW_navList{flex-direction:column;gap:4px;display:flex}.VOzbGW_navCell{box-sizing:border-box;cursor:pointer;height:40px;color:var(--dsw-alias-label-primary);text-align:left;background:0 0;border:none;border-radius:12px;align-items:center;gap:8px;padding:9px 16px 9px 12px;font-family:inherit;font-size:14px;font-weight:400;line-height:22px;display:flex}.VOzbGW_navCell:hover{background:var(--dsw-specific-sidebar-nav-item-hover)}.VOzbGW_navCell.VOzbGW_active{background:var(--dsw-specific-sidebar-nav-item-active)}.VOzbGW_navIcon{flex:none}.VOzbGW_navLabel{white-space:nowrap;text-overflow:ellipsis;flex:1;min-width:0;overflow:hidden}.VOzbGW_content{flex-direction:column;flex:1;min-width:0;display:flex}.VOzbGW_header{box-sizing:border-box;flex:none;justify-content:space-between;align-items:flex-start;gap:8px;height:54px;padding:20px 14px 8px 10px;display:flex}.VOzbGW_actions{justify-content:flex-end;align-items:center;gap:8px;min-width:0;margin-left:auto;display:flex}.VOzbGW_close{cursor:pointer;width:28px;height:28px;color:var(--dsw-alias-label-primary);background:0 0;border:none;border-radius:28px;justify-content:center;align-items:center;padding:0;display:inline-flex}.VOzbGW_close:hover{background:var(--dsw-alias-interactive-bg-hover)}.VOzbGW_options{flex:1;min-height:0;padding:0 24px 24px;overflow-y:auto}.VOzbGW_hiddenLabel{clip:rect(0 0 0 0);white-space:nowrap;width:1px;height:1px;position:absolute;overflow:hidden}";
+		const css$3 = ".VOzbGW_trigger{box-sizing:border-box;cursor:pointer;width:calc(100% + 4px);height:42px;color:var(--dsw-alias-label-primary);background:0 0;border:none;border-radius:12px;flex:none;align-items:center;gap:8px;margin:4px -2px;padding:0 10px 0 8px;font-family:inherit;font-size:14px;line-height:22px;display:flex;overflow:hidden}.VOzbGW_trigger:hover{background:var(--dsw-alias-interactive-bg-hover)}.VOzbGW_trigger.VOzbGW_rail{border-radius:50%;justify-content:center;gap:0;width:36px;height:36px;margin:8px 0 10px;padding:0}.VOzbGW_triggerLabel{white-space:nowrap;overflow:hidden}.VOzbGW_overlay{z-index:1000;justify-content:center;align-items:center;display:flex;position:fixed;inset:0}.VOzbGW_mask{background:var(--dsw-alias-bg-mask-1);backdrop-filter:var(--dsw-mask-blur);position:absolute;inset:0}.VOzbGW_panel{z-index:1;background:var(--dsw-alias-bg-layer-2);width:800px;max-width:calc(100vw - 48px);height:min(800px,100vh - 48px);box-shadow:var(--dsw-shadow-lv3);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2);border-radius:24px;display:flex;position:relative;overflow:hidden}.VOzbGW_nav{box-sizing:border-box;flex-direction:column;flex:none;gap:18px;width:188px;padding:22px 12px 0;display:flex}.VOzbGW_navTitle{color:var(--dsw-alias-label-primary);padding:0 12px;font-size:16px;font-weight:500;line-height:24px}.VOzbGW_navList{flex-direction:column;gap:4px;display:flex}.VOzbGW_navCell{box-sizing:border-box;cursor:pointer;height:40px;color:var(--dsw-alias-label-primary);text-align:left;background:0 0;border:none;border-radius:12px;align-items:center;gap:8px;padding:9px 16px 9px 12px;font-family:inherit;font-size:14px;font-weight:400;line-height:22px;display:flex}.VOzbGW_navCell:hover{background:var(--dsw-specific-sidebar-nav-item-hover)}.VOzbGW_navCell.VOzbGW_active{background:var(--dsw-specific-sidebar-nav-item-active)}.VOzbGW_navIcon{flex:none}.VOzbGW_navLabel{white-space:nowrap;text-overflow:ellipsis;flex:1;min-width:0;overflow:hidden}.VOzbGW_content{flex-direction:column;flex:1;min-width:0;display:flex}.VOzbGW_header{box-sizing:border-box;flex:none;justify-content:space-between;align-items:flex-start;gap:8px;height:54px;padding:20px 14px 8px 10px;display:flex}.VOzbGW_actions{justify-content:flex-end;align-items:center;gap:8px;min-width:0;margin-left:auto;display:flex}.VOzbGW_close{cursor:pointer;width:28px;height:28px;color:var(--dsw-alias-label-primary);background:0 0;border:none;border-radius:28px;justify-content:center;align-items:center;padding:0;display:inline-flex}.VOzbGW_close:hover{background:var(--dsw-alias-interactive-bg-hover)}.VOzbGW_options{flex:1;min-height:0;padding:0 24px 24px;overflow-y:auto}.VOzbGW_hiddenLabel{clip:rect(0 0 0 0);white-space:nowrap;width:1px;height:1px;position:absolute;overflow:hidden}";
 		const tagId$3 = "@deepseek-ai/dsh-client-ui-settings-general/SettingsRoot.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId$3) + "]") === null) {
 			const tag = document.createElement("style");
@@ -36,25 +35,25 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var SettingsRoot_module_css_default = {
-			"options": "VOzbGW_options",
-			"navList": "VOzbGW_navList",
-			"panel": "VOzbGW_panel",
 			"actions": "VOzbGW_actions",
-			"navCell": "VOzbGW_navCell",
-			"triggerLabel": "VOzbGW_triggerLabel",
 			"active": "VOzbGW_active",
-			"navLabel": "VOzbGW_navLabel",
-			"navIcon": "VOzbGW_navIcon",
-			"trigger": "VOzbGW_trigger",
-			"content": "VOzbGW_content",
 			"close": "VOzbGW_close",
-			"rail": "VOzbGW_rail",
-			"nav": "VOzbGW_nav",
-			"overlay": "VOzbGW_overlay",
-			"navTitle": "VOzbGW_navTitle",
+			"content": "VOzbGW_content",
 			"header": "VOzbGW_header",
 			"hiddenLabel": "VOzbGW_hiddenLabel",
-			"mask": "VOzbGW_mask"
+			"mask": "VOzbGW_mask",
+			"nav": "VOzbGW_nav",
+			"navCell": "VOzbGW_navCell",
+			"navIcon": "VOzbGW_navIcon",
+			"navLabel": "VOzbGW_navLabel",
+			"navList": "VOzbGW_navList",
+			"navTitle": "VOzbGW_navTitle",
+			"options": "VOzbGW_options",
+			"overlay": "VOzbGW_overlay",
+			"panel": "VOzbGW_panel",
+			"rail": "VOzbGW_rail",
+			"trigger": "VOzbGW_trigger",
+			"triggerLabel": "VOzbGW_triggerLabel"
 		};
 		//#endregion
 		//#region lib/types/client/SettingsRoot.js
@@ -311,8 +310,8 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var SettingsDocumentAction_module_css_default = {
-			"error": "me01iq_error",
-			"action": "me01iq_action"
+			"action": "me01iq_action",
+			"error": "me01iq_error"
 		};
 		//#endregion
 		//#region lib/types/client/SettingsDocumentAction.js
@@ -351,53 +350,40 @@ window.__ModuleLoader__.load({
 		function messageOf(error) {
 			return error instanceof Error ? error.message : String(error);
 		}
-		/** Loads local-document availability and invokes the pathless Host-owned open operation. */
+		/** Derives local-document availability from the shared mirror and invokes the pathless Host-owned open operation. */
 		var SettingsDocumentStore = class {
 			api;
+			describeFace;
 			/** uSES-safe state source shared by the registered header action. */
 			store = (0, _deepseek_ai_dsh_client_runtime_client.createSnapshotStore)({
 				status: "idle",
 				opening: false,
 				error: null
 			});
-			generation = 0;
+			following;
 			/**
-			* @param api - loopback settings wire face that reports and opens the provider document.
+			* @param api - loopback settings wire face that opens the provider document.
+			* @param describeFace - the shared mirror's describe face (`hasDocument` source).
 			*/
-			constructor(api) {
+			constructor(api, describeFace) {
 				this.api = api;
+				this.describeFace = describeFace;
 			}
 			/**
-			* Load whether the current provider owns a local document.
-			* @returns after the latest metadata response updates the store.
+			* Begin following the mirror (idempotent) and reflect whether the current
+			* provider owns a local document.
+			* @returns settlement once the snapshot reflects the mirror.
 			*/
 			async load() {
-				const generation = ++this.generation;
+				this.following ??= this.describeFace.subscribe(() => {
+					this.derive();
+				});
 				this.store.update((state) => {
 					state.status = "loading";
 					state.error = null;
 				});
-				try {
-					const { result } = await this.api.settings.describe({});
-					if (generation !== this.generation) return;
-					if (!result.ok) {
-						this.store.update((state) => {
-							state.status = "unavailable";
-							state.error = result.error.message;
-						});
-						return;
-					}
-					this.store.update((state) => {
-						state.status = result.value.hasDocument ? "ready" : "unavailable";
-						state.error = null;
-					});
-				} catch (error) {
-					if (generation !== this.generation) return;
-					this.store.update((state) => {
-						state.status = "unavailable";
-						state.error = messageOf(error);
-					});
-				}
+				await this.describeFace.ensure();
+				this.derive();
 			}
 			/**
 			* Open the loaded document once; concurrent gestures collapse behind the in-flight action.
@@ -423,15 +409,27 @@ window.__ModuleLoader__.load({
 					});
 				}
 			}
+			/** Stop following the mirror. */
+			dispose() {
+				this.following?.();
+				this.following = void 0;
+			}
+			derive() {
+				const mirrored = this.describeFace.getSnapshot();
+				if (mirrored.view === void 0) {
+					if (mirrored.error !== null) this.store.update((state) => {
+						state.status = "unavailable";
+						state.error = mirrored.error;
+					});
+					return;
+				}
+				const { hasDocument } = mirrored.view;
+				this.store.update((state) => {
+					state.status = hasDocument ? "ready" : "unavailable";
+					state.error = null;
+				});
+			}
 		};
-		/**
-		* Refresh document availability after reconnect only when a surface has already requested it.
-		* @param controller - optional loopback document state owner.
-		*/
-		function refreshDocumentIfLoaded(controller) {
-			if (controller === void 0 || controller.store.getSnapshot().status === "idle") return;
-			controller.load();
-		}
 		//#endregion
 		//#region lib/types/client/locales.js
 		/** Shell chrome and General-nav dictionaries; feature rows own their copy. */
@@ -465,7 +463,8 @@ window.__ModuleLoader__.load({
 		const inject = [
 			"slots",
 			"locale",
-			"connection"
+			"connection",
+			"settingsScope"
 		];
 		/**
 		* Register the `settings` dictionaries, the chrome content, and the General
@@ -479,17 +478,14 @@ window.__ModuleLoader__.load({
 			}), "ui-settings-general: dictionaries");
 			const t = ctx.locale.bind(NS);
 			const connection = ctx.get("connection");
-			const documentController = connection.isLoopback ? new SettingsDocumentStore(connection.api) : void 0;
-			const documentInjected = documentController === void 0 ? void 0 : (() => {
-				const useSnapshot = (0, _deepseek_ai_dsh_client_web_react.bindSnapshotSelector)(documentController.store);
-				return () => ({
-					controller: documentController,
-					useSnapshot
-				});
-			})();
-			ctx.effect(() => ctx.on("connection/reset", () => {
-				refreshDocumentIfLoaded(documentController);
-			}), "ui-settings-general: metadata invalidations");
+			const documentController = connection.isLoopback ? new SettingsDocumentStore(connection.api, ctx.settingsScope.describe()) : void 0;
+			const documentInjected = documentController === void 0 ? void 0 : () => ({
+				controller: documentController,
+				hooks: { snapshot: documentController.store }
+			});
+			ctx.effect(() => () => {
+				documentController?.dispose();
+			}, "ui-settings-general: document action directory");
 			let rowsVersion = -1;
 			let rowsRevision = -1;
 			let rows = [];

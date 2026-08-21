@@ -18,22 +18,22 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var SkillRow_module_css_default = {
-			"chevron": "iWrAna_chevron",
-			"iconIdle": "iWrAna_iconIdle",
-			"title": "iWrAna_title",
-			"summary": "iWrAna_summary",
-			"chevronHover": "iWrAna_chevronHover",
 			"bodyWrap": "iWrAna_bodyWrap",
-			"leading": "iWrAna_leading",
-			"errorSummary": "iWrAna_errorSummary",
-			"dsh-skill-row-sweep": "iWrAna_dsh-skill-row-sweep",
 			"card": "iWrAna_card",
-			"instructionsHeader": "iWrAna_instructionsHeader",
+			"chevron": "iWrAna_chevron",
+			"chevronHover": "iWrAna_chevronHover",
+			"dsh-skill-row-sweep": "iWrAna_dsh-skill-row-sweep",
+			"errorSummary": "iWrAna_errorSummary",
+			"iconIdle": "iWrAna_iconIdle",
 			"inspectButton": "iWrAna_inspectButton",
+			"instructions": "iWrAna_instructions",
+			"instructionsCard": "iWrAna_instructionsCard",
+			"instructionsHeader": "iWrAna_instructionsHeader",
+			"leading": "iWrAna_leading",
 			"row": "iWrAna_row",
 			"separator": "iWrAna_separator",
-			"instructionsCard": "iWrAna_instructionsCard",
-			"instructions": "iWrAna_instructions",
+			"summary": "iWrAna_summary",
+			"title": "iWrAna_title",
 			"visuallyHidden": "iWrAna_visuallyHidden"
 		};
 		//#endregion

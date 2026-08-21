@@ -51,7 +51,13 @@ const EXCLUDE = new Map([
   ['@deepseek-ai/dsh-client-hmr', 'hot module replacement; a dev-server feature with no server to talk to'],
   ['@deepseek-ai/dsh-client-modules', 'the loader itself, already inside the shell bundle'],
   ['@deepseek-ai/dsh-client-web', 'the shell; it is the page, not an entry in its own graph'],
-  ['@deepseek-ai/dsh-client-web-react', 'shell internals, bundled with the shell'],
+  // dsh-client-web-react and dsh-client-schema-form used to be excluded here as
+  // shell internals. They stopped existing at 0.1.0-rc.8: upstream's
+  // packages/client/ has no such directory and no rc.8 client package depends
+  // on either, so the exclusion has nothing left to exclude. The names stay in
+  // this comment because `upstream-closure.json` still lists them — the roster
+  // is fed by that crawl, and a reader who greps for them should find out why
+  // they are gone rather than find nothing.
 
   // Design 8.2 item 1, and it turns out to be a roster line rather than a patch.
   //
@@ -74,6 +80,15 @@ const EXCLUDE = new Map([
   // Shipping a panel whose every call fails is worse than not shipping it.
   ['@deepseek-ai/dsh-client-ui-cordis', 'ADR-09: the plugin plane is not implemented; its calls 404'],
   ['@deepseek-ai/dsh-cordis-client-runner', 'ADR-09: transport for the plugin plane above'],
+
+  // Upstream's official branding, new at 0.1.0-rc.8 and the one client plugin
+  // this deployment must NOT install. rc.8 also published BRAND_GUIDELINES.md:
+  // "DeepSeek Harness" is a registered trademark, descriptive use is fine, and
+  // official brand materials must not be used in a way that suggests
+  // endorsement. A third-party port wearing the official marks is exactly that
+  // suggestion. The README's "Unofficial. Not affiliated with DeepSeek" says
+  // the opposite, and a page carrying both would be lying in one of them.
+  ['@deepseek-ai/dsh-client-ui-brand-official', 'BRAND_GUIDELINES.md (rc.8): official marks in a third-party port would imply endorsement'],
 ])
 
 // The roster is defined by the DECLARATION, not by the package name.

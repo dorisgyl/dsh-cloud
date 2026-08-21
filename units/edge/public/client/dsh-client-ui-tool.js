@@ -9,6 +9,14 @@ window.__ModuleLoader__.load({
 		let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
 		let _deepseek_ai_dsh_client_runtime_client = require("@deepseek-ai/dsh-client-runtime/client");
 		//#region lib/types/client/tool/models/tool-call-model.js
+		/**
+		* Pure row-model derivation for tool summary rows: variant classification,
+		* one-line summary, expanded-body text, and flattened result output from the
+		* frozen call slice. Input material comes from the call ARGUMENTS; output and
+		* error material from the settled result node. A call whose render intent is
+		* a terminal card gets its expanded body from the views instead, through
+		* `terminalCardModel` in terminal-card-model.ts.
+		*/
 		/** Figma row titles per variant (design literals, not translatable copy). */
 		const VARIANT_TITLES = {
 			search: "Search",
@@ -127,6 +135,10 @@ window.__ModuleLoader__.load({
 			const parsed = parseArgs(argsRaw);
 			if (typeof parsed !== "object" || parsed === null) return firstLine(argsRaw);
 			const args = parsed;
+			if (variant === "search" && Array.isArray(args.queries)) {
+				const queries = args.queries.filter((query) => typeof query === "string" && query !== "");
+				if (queries.length > 0) return queries.map(firstLine).join(", ");
+			}
 			const picked = pickString(args, SUMMARY_KEYS[variant]);
 			if (picked !== void 0) return firstLine(picked);
 			for (const v of Object.values(args)) if (typeof v === "string" && v !== "") return firstLine(v);
@@ -162,14 +174,15 @@ window.__ModuleLoader__.load({
 		* @param toolName - wire tool name (dispatch-supplied; survives windowless results).
 		* @param block - RunningToolCall or ToolResultNode off the snapshot caches.
 		* @param cwd - session workspace root; workspace-rooted path summaries display relative to it.
+		* @param home - host account home; a leftover POSIX home path displays as `~`.
 		* @returns the row model.
 		*/
-		function toolRowModel(toolName, block, cwd) {
+		function toolRowModel(toolName, block, cwd, home) {
 			const variant = classifyTool(toolName);
 			const done = "kind" in block;
 			const argsRaw = (done ? block.call?.argsRaw : block.argsRaw) ?? "";
 			const state = !done ? "running" : block.error?.code === "interrupted" ? "stopped" : block.isError ? "error" : "ok";
-			const base = argsRaw === "" ? block.callId : relativizeToCwd(deriveSummary(variant, argsRaw), cwd);
+			const base = argsRaw === "" ? block.callId : (0, _deepseek_ai_dsh_client_runtime_client.abbreviateHomePath)(relativizeToCwd(deriveSummary(variant, argsRaw), cwd), home);
 			const toolTitle = TOOL_TITLES[toolName];
 			const summary = variant === "others" && toolName !== "" && toolTitle === void 0 ? `${toolName} · ${base}` : base;
 			const output = done ? resultText(block) || null : null;
@@ -188,6 +201,21 @@ window.__ModuleLoader__.load({
 		//#endregion
 		//#region lib/types/client/tool/models/read-card-model.js
 		/**
+		* Pure derivation of the read-card props from a frozen call slice: the
+		* `card:'read'` render intent the read tool declares arrives on the snapshot as
+		* the settled result node's `resultView`, and this is the one place that turns
+		* it into what {@link ReadBlock} draws. Both conversation render sites (the chat
+		* tool row's resident body and the details panel's Output section) call this, so
+		* the path, lines, total, and language they show are derived once.
+		*
+		* The read card is result-side only ([read card note](../../../../../../.agents/notes/implemented/feature/2026-07-30-web-read-card.md)):
+		* a call carries no file content until `execute` returns, so the pending call
+		* stays a generic card (`kind: 'read'`). A running read therefore has no read
+		* card, and this returns null for it — the row keeps its args-derived summary
+		* until the result arrives.
+		* @module
+		*/
+		/**
 		* Derive the read-card props for a tool call, or null when this call is not a
 		* read card and belongs on the generic path.
 		*
@@ -204,14 +232,15 @@ window.__ModuleLoader__.load({
 		*
 		* The label is the read view's `title` when the tool supplied one (the
 		* presentation contract's replacement-title rule), otherwise the file path
-		* relativized to the session workspace so a workspace-rooted absolute path
-		* displays the same short form the row summary shows.
+		* shortened the same way the row summary is: workspace-relative first, then
+		* POSIX `~` for a leftover host-home path.
 		* @param block - RunningToolCall or ToolResultNode off the snapshot caches.
 		* @param sessionCwd - the session workspace root; a workspace-rooted absolute
 		*   path label displays relative to it. Absent leaves the path as authored.
+		* @param home - host account home; a leftover POSIX home path displays as `~`.
 		* @returns the read-card props, or null for the generic path.
 		*/
-		function readCardModel(block, sessionCwd) {
+		function readCardModel(block, sessionCwd, home) {
 			if (!("kind" in block)) return null;
 			const result = block.resultView?.card === "read" ? block.resultView : null;
 			if (result === null) return null;
@@ -220,7 +249,7 @@ window.__ModuleLoader__.load({
 				text: line.text
 			}));
 			return {
-				label: result.title ?? relativizeToCwd(result.path, sessionCwd),
+				label: result.title ?? (0, _deepseek_ai_dsh_client_runtime_client.abbreviateHomePath)(relativizeToCwd(result.path, sessionCwd), home),
 				lines,
 				totalLines: result.totalLines,
 				lang: result.lang
@@ -605,33 +634,33 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var ToolRow_module_css_default = {
-			"chevron": "o3BgMG_chevron",
 			"bodyScroll": "o3BgMG_bodyScroll",
-			"row": "o3BgMG_row",
-			"inspectButton": "o3BgMG_inspectButton",
-			"ioSection": "o3BgMG_ioSection",
-			"ioText": "o3BgMG_ioText",
-			"readBody": "o3BgMG_readBody",
-			"ioCard": "o3BgMG_ioCard",
-			"searchRecovery": "o3BgMG_searchRecovery",
-			"visuallyHidden": "o3BgMG_visuallyHidden",
-			"root": "o3BgMG_root",
-			"searchBody": "o3BgMG_searchBody",
-			"webBody": "o3BgMG_webBody",
-			"leading": "o3BgMG_leading",
-			"dsh-tool-row-sweep": "o3BgMG_dsh-tool-row-sweep",
-			"terminalBody": "o3BgMG_terminalBody",
+			"bodyWrap": "o3BgMG_bodyWrap",
+			"chevron": "o3BgMG_chevron",
 			"codeBody": "o3BgMG_codeBody",
 			"diffBody": "o3BgMG_diffBody",
-			"fileLink": "o3BgMG_fileLink",
-			"summary": "o3BgMG_summary",
-			"title": "o3BgMG_title",
+			"dsh-tool-row-sweep": "o3BgMG_dsh-tool-row-sweep",
 			"errorSummary": "o3BgMG_errorSummary",
-			"sep": "o3BgMG_sep",
-			"summarySuffix": "o3BgMG_summarySuffix",
-			"ioLabel": "o3BgMG_ioLabel",
+			"fileLink": "o3BgMG_fileLink",
+			"inspectButton": "o3BgMG_inspectButton",
+			"ioCard": "o3BgMG_ioCard",
 			"ioDivider": "o3BgMG_ioDivider",
-			"bodyWrap": "o3BgMG_bodyWrap"
+			"ioLabel": "o3BgMG_ioLabel",
+			"ioSection": "o3BgMG_ioSection",
+			"ioText": "o3BgMG_ioText",
+			"leading": "o3BgMG_leading",
+			"readBody": "o3BgMG_readBody",
+			"root": "o3BgMG_root",
+			"row": "o3BgMG_row",
+			"searchBody": "o3BgMG_searchBody",
+			"searchRecovery": "o3BgMG_searchRecovery",
+			"sep": "o3BgMG_sep",
+			"summary": "o3BgMG_summary",
+			"summarySuffix": "o3BgMG_summarySuffix",
+			"terminalBody": "o3BgMG_terminalBody",
+			"title": "o3BgMG_title",
+			"visuallyHidden": "o3BgMG_visuallyHidden",
+			"webBody": "o3BgMG_webBody"
 		};
 		//#endregion
 		//#region lib/types/client/tool/components/ToolRow.js
@@ -808,10 +837,10 @@ window.__ModuleLoader__.load({
 			code: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCodeOutline16, { size: 14 }),
 			others: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconSparkle16, { size: 14 })
 		};
-		function GenericToolCard({ toolName, block, cwd, openFile, inspect, t }) {
-			const model = toolRowModel(toolName, block, cwd);
+		function GenericToolCard({ toolName, block, cwd, home, openFile, inspect, t }) {
+			const model = toolRowModel(toolName, block, cwd, home);
 			const terminal = terminalCardModel(block, cwd);
-			const read = readCardModel(block, cwd);
+			const read = readCardModel(block, cwd, home);
 			const diff = diffCardModel(block);
 			const search = searchCardModel(block);
 			const web = webCardModel(block);
@@ -861,13 +890,14 @@ window.__ModuleLoader__.load({
 			return "kind" in node ? node.call?.name ?? "" : node.name;
 		}
 		/** One atomic call dispatched through the Tool-owned keyed slot. */
-		const ToolCall = (0, react.memo)(function ToolCall({ renderSlot, callId, toolName, block, openFile, selected, cwd, inspectCall, t, children }) {
+		const ToolCall = (0, react.memo)(function ToolCall({ renderSlot, callId, toolName, block, openFile, selected, cwd, home, inspectCall, t, children }) {
 			const owner = (0, react.useMemo)(() => ({
 				callId,
 				toolName,
 				block,
 				openFile,
 				cwd,
+				home,
 				inspect: () => {
 					inspectCall(callId);
 				}
@@ -877,6 +907,7 @@ window.__ModuleLoader__.load({
 				block,
 				openFile,
 				cwd,
+				home,
 				inspectCall
 			]);
 			return (0, react_jsx_runtime.jsxs)("div", {
@@ -893,7 +924,7 @@ window.__ModuleLoader__.load({
 				}), children]
 			});
 		});
-		const ToolCallBranch = (0, react.memo)(function ToolCallBranch({ renderSlot, block, selectedCallId, cwd, openFile, inspectCall, t }) {
+		const ToolCallBranch = (0, react.memo)(function ToolCallBranch({ renderSlot, block, selectedCallId, cwd, home, openFile, inspectCall, t }) {
 			return (0, react_jsx_runtime.jsx)(ToolCall, {
 				renderSlot,
 				callId: block.callId,
@@ -902,6 +933,7 @@ window.__ModuleLoader__.load({
 				openFile,
 				selected: block.callId === selectedCallId,
 				cwd,
+				home,
 				inspectCall,
 				t,
 				children: block.subCalls.length > 0 ? (0, react_jsx_runtime.jsx)("div", {
@@ -912,6 +944,7 @@ window.__ModuleLoader__.load({
 						block: child,
 						selectedCallId,
 						cwd,
+						home,
 						openFile,
 						inspectCall,
 						t
@@ -925,13 +958,15 @@ window.__ModuleLoader__.load({
 		* @param props - whole-Tool owner data and the Tool-owned child-slot share.
 		* @returns the Tool call tree.
 		*/
-		function ToolCallTree({ renderSlot, node, selectedCallId, cwd, openFile, inspectCall, t }) {
+		function ToolCallTree({ renderSlot, node, selectedCallId, cwd, openFile, inspectCall, useHostDescription, t }) {
+			const home = useHostDescription((description) => description?.home);
 			const block = node.data.root;
 			return (0, react_jsx_runtime.jsx)(ToolCallBranch, {
 				renderSlot,
 				block,
 				selectedCallId,
 				cwd,
+				home,
 				openFile,
 				inspectCall,
 				t
@@ -949,13 +984,13 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var ToolDetails_module_css_default = {
-			"read": "xDAfVq_read",
-			"description": "xDAfVq_description",
-			"recovery": "xDAfVq_recovery",
-			"web": "xDAfVq_web",
+			"cardBody": "xDAfVq_cardBody",
 			"code": "xDAfVq_code",
+			"description": "xDAfVq_description",
 			"empty": "xDAfVq_empty",
-			"cardBody": "xDAfVq_cardBody"
+			"read": "xDAfVq_read",
+			"recovery": "xDAfVq_recovery",
+			"web": "xDAfVq_web"
 		};
 		//#endregion
 		//#region lib/types/client/tool/ToolDetails.js
@@ -963,10 +998,11 @@ window.__ModuleLoader__.load({
 		/**
 		* Render the selected Tool call's structured output when its presentation
 		* intent is known, otherwise preserve the flattened result text.
-		* @param props - selected call slice, workspace root, and locale seat.
+		* @param props - selected call slice, workspace root, host home, and locale seat.
 		* @returns the details output body.
 		*/
-		function ToolDetails({ block, cwd, t }) {
+		function ToolDetails({ block, cwd, useHostDescription, t }) {
+			const home = useHostDescription((description) => description?.home);
 			const terminal = terminalCardModel(block, cwd);
 			if (terminal !== null) return (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [terminal.description !== void 0 ? (0, react_jsx_runtime.jsx)("div", {
 				className: ToolDetails_module_css_default.description,
@@ -976,7 +1012,7 @@ window.__ModuleLoader__.load({
 				labels: terminalBlockLabels(t),
 				className: ToolDetails_module_css_default.cardBody
 			})] });
-			const read = readCardModel(block, cwd);
+			const read = readCardModel(block, cwd, home);
 			if (read !== null) return (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.ReadBlock, {
 				...read,
 				className: ToolDetails_module_css_default.read
@@ -1099,25 +1135,25 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var bash_sample_module_css_default = {
-			"chevron": "CY-8Ka_chevron",
-			"dsh-bash-row-sweep": "CY-8Ka_dsh-bash-row-sweep",
+			"bodyWrap": "CY-8Ka_bodyWrap",
 			"card": "CY-8Ka_card",
+			"chevron": "CY-8Ka_chevron",
+			"chevronHover": "CY-8Ka_chevronHover",
+			"dsh-bash-row-sweep": "CY-8Ka_dsh-bash-row-sweep",
+			"errorSummary": "CY-8Ka_errorSummary",
+			"iconIdle": "CY-8Ka_iconIdle",
+			"inspectButton": "CY-8Ka_inspectButton",
 			"ioCard": "CY-8Ka_ioCard",
 			"ioDivider": "CY-8Ka_ioDivider",
-			"sep": "CY-8Ka_sep",
-			"root": "CY-8Ka_root",
+			"ioLabel": "CY-8Ka_ioLabel",
+			"ioSection": "CY-8Ka_ioSection",
+			"ioText": "CY-8Ka_ioText",
 			"leading": "CY-8Ka_leading",
-			"title": "CY-8Ka_title",
-			"errorSummary": "CY-8Ka_errorSummary",
-			"chevronHover": "CY-8Ka_chevronHover",
+			"root": "CY-8Ka_root",
+			"sep": "CY-8Ka_sep",
 			"summary": "CY-8Ka_summary",
 			"terminal": "CY-8Ka_terminal",
-			"ioText": "CY-8Ka_ioText",
-			"ioSection": "CY-8Ka_ioSection",
-			"iconIdle": "CY-8Ka_iconIdle",
-			"bodyWrap": "CY-8Ka_bodyWrap",
-			"ioLabel": "CY-8Ka_ioLabel",
-			"inspectButton": "CY-8Ka_inspectButton",
+			"title": "CY-8Ka_title",
 			"visuallyHidden": "CY-8Ka_visuallyHidden"
 		};
 		//#endregion
@@ -1275,8 +1311,8 @@ window.__ModuleLoader__.load({
 		* model-facing error text through its Output section and its first line in the
 		* collapsed summary instead.
 		*/
-		function FileMutationRow({ toolName, block, cwd, openFile, inspect, t }) {
-			const model = toolRowModel(toolName, block, cwd);
+		function FileMutationRow({ toolName, block, cwd, home, openFile, inspect, t }) {
+			const model = toolRowModel(toolName, block, cwd, home);
 			const diff = diffCardModel(block);
 			return (0, react_jsx_runtime.jsx)(ToolRow, {
 				t,
@@ -1329,9 +1365,9 @@ window.__ModuleLoader__.load({
 		* read card as the row's collapsed-by-default card body. The summary path is an
 		* openable host link when the row names a single file.
 		*/
-		function ReadRow({ toolName, block, cwd, openFile, inspect, t }) {
-			const model = toolRowModel(toolName, block, cwd);
-			const read = readCardModel(block, cwd);
+		function ReadRow({ toolName, block, cwd, home, openFile, inspect, t }) {
+			const model = toolRowModel(toolName, block, cwd, home);
+			const read = readCardModel(block, cwd, home);
 			return (0, react_jsx_runtime.jsx)(ToolRow, {
 				t,
 				variant: model.variant,
@@ -1592,13 +1628,15 @@ window.__ModuleLoader__.load({
 		};
 		//#endregion
 		//#region lib/types/client/apply.js
-		/** Required service: the slot registry that owns both Tool render seats. */
-		const inject = ["slots"];
+		/** Required services: the slot registry and the Host description used for POSIX `~`. */
+		const inject = ["slots", "connection"];
 		/**
 		* Mount the whole-Tool renderers and built-in atomic Tool registrations.
 		* @param ctx - Client root context.
 		*/
 		function apply(ctx) {
+			const connection = ctx.get("connection");
+			const toolInject = () => ({ hooks: { hostDescription: connection.hostDescription } });
 			ctx.slots.inject("conversation.chat.node", () => ctx.slots.register({
 				name: "conversation.chat.node",
 				key: "tool-call",
@@ -1606,11 +1644,13 @@ window.__ModuleLoader__.load({
 				children: { "tool.call.toolview": {
 					kind: "keyed",
 					scope: "session"
-				} }
+				} },
+				inject: toolInject
 			}, ToolCallTree));
 			ctx.slots.inject("conversation.details.tool", () => ctx.slots.register({
 				name: "conversation.details.tool",
-				locale: CONVERSATION_NS
+				locale: CONVERSATION_NS,
+				inject: toolInject
 			}, ToolDetails));
 			ctx.plugin(bashToolviewSample);
 			ctx.plugin(readToolview);

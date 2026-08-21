@@ -9,7 +9,37 @@ window.__ModuleLoader__.load({
 		let react_jsx_runtime = require("react/jsx-runtime");
 		let react = require("react");
 		let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
+		//#region ../../context/file-reference/src/grammar.ts
+		/**
+		* Extract an `@path` or `@"path with spaces` token at the cursor. An `@`
+		* inside another token, such as an email address, is not a completion trigger.
+		* @param line - current editor line.
+		* @param cursorCol - cursor column within that line.
+		* @returns the active token, or `undefined` outside an `@` token.
+		*/
+		function activeAtToken(line, cursorCol) {
+			const beforeCursor = line.slice(0, cursorCol);
+			const quoted = /(?:^|\s)(@"([^"]*))$/u.exec(beforeCursor);
+			if (quoted?.[1] !== void 0 && quoted[2] !== void 0) return {
+				prefix: quoted[1],
+				query: quoted[2],
+				quoted: true
+			};
+			const plain = /(?:^|\s)(@([^\s]*))$/u.exec(beforeCursor);
+			if (plain?.[1] === void 0 || plain[2] === void 0) return void 0;
+			return {
+				prefix: plain[1],
+				query: plain[2],
+				quoted: false
+			};
+		}
+		//#endregion
 		//#region lib/types/core/detect.js
+		/**
+		* Trigger detection pure core. Scans backward from
+		* the caret for a live trigger char under the guard tier and applies the
+		* word-boundary rules. Zero React / DOM / cordis.
+		*/
 		const WORD_CHAR = /[\p{L}\p{N}_]/u;
 		const WHITESPACE = /\s/u;
 		/**
@@ -31,10 +61,10 @@ window.__ModuleLoader__.load({
 			return true;
 		}
 		/**
-		* Detect a trigger token at the caret. Scans left from the caret and stops
-		* at the first whitespace (the token under edit never spans whitespace);
-		* trigger chars failing the guard tier or the word boundary are treated as
-		* ordinary token chars and the scan continues (`user@host`, URL slashes).
+		* Detect a trigger token at the caret. `@` first uses the shared grammar,
+		* including an open quoted token that may span whitespace. Slash detection
+		* scans left to the first whitespace; slashes failing the word boundary are
+		* treated as ordinary token chars and the scan continues (URL slashes).
 		* Guard tiers: plain = both chars live; claimed = '/' fully suppressed,
 		* '@' live; frozen = none.
 		*
@@ -48,15 +78,31 @@ window.__ModuleLoader__.load({
 		*/
 		const detectTrigger = (draft, caret, guard) => {
 			if (guard.tier === "frozen") return null;
+			const at = activeAtToken(draft, caret);
+			if (at !== void 0) {
+				const start = caret - at.prefix.length;
+				return {
+					trigger: "@",
+					query: at.query,
+					quoted: at.quoted,
+					position: draft.search(/\S/) === start ? "leading" : "inline",
+					span: {
+						start,
+						end: caret,
+						draftRev: 0
+					}
+				};
+			}
 			for (let i = caret - 1; i >= 0; i--) {
 				const ch = draft.charAt(i);
 				if (WHITESPACE.test(ch)) return null;
-				if (ch !== "/" && ch !== "@") continue;
-				if (guard.tier === "claimed" && ch === "/") continue;
+				if (ch !== "/") continue;
+				if (guard.tier === "claimed") continue;
 				if (!boundaryOk(draft, i, ch)) continue;
 				return {
 					trigger: ch,
 					query: draft.slice(i + 1, caret),
+					quoted: false,
 					position: draft.search(/\S/) === i ? "leading" : "inline",
 					span: {
 						start: i,
@@ -82,14 +128,15 @@ window.__ModuleLoader__.load({
 		* Shell-side step before dispatching `hit` on a fresh menu open.
 		*
 		* @param state - Current menu state.
-		* @param sources - Source names registered for the hit trigger, menu order.
+		* @param sources - Sources registered for the hit trigger, in menu order.
 		* @returns State carrying the new pending roster; highlight cleared.
 		*/
 		function seedGroups(state, sources) {
 			return {
 				...state,
 				groups: sources.map((source) => ({
-					source,
+					source: source.name,
+					...source.showGroupTitle === false ? { showGroupTitle: false } : {},
 					status: "pending",
 					items: []
 				})),
@@ -153,7 +200,7 @@ window.__ModuleLoader__.load({
 						hit: ev.hit,
 						generation: state.generation + 1,
 						groups: state.groups.map((g) => ({
-							source: g.source,
+							...g,
 							status: "pending",
 							items: []
 						})),
@@ -165,7 +212,7 @@ window.__ModuleLoader__.load({
 					if (idx < 0) return state;
 					const items = ev.items ?? [];
 					const groups = state.groups.map((g, i) => i === idx ? {
-						source: g.source,
+						...g,
 						status: "ready",
 						items
 					} : g);
@@ -276,7 +323,7 @@ window.__ModuleLoader__.load({
 					}
 				};
 				const prev = this.menu.getSnapshot();
-				const same = !launched && prev.open && prev.hit !== null && prev.hit.trigger === hit.trigger && prev.hit.query === hit.query && prev.hit.span.start === hit.span.start && prev.hit.span.end === hit.span.end;
+				const same = !launched && prev.open && prev.hit !== null && prev.hit.trigger === hit.trigger && prev.hit.query === hit.query && prev.hit.quoted === hit.quoted && prev.hit.span.start === hit.span.start && prev.hit.span.end === hit.span.end;
 				this.hit = hit;
 				if (same) return;
 				const roster = this.deps.roster.sources(hit.trigger);
@@ -285,7 +332,7 @@ window.__ModuleLoader__.load({
 					this.reduce({ type: "close" });
 					return;
 				}
-				if (launched || !prev.open || prev.hit === null || prev.hit.trigger !== hit.trigger) this.menu.set(seedGroups(this.menu.getSnapshot(), roster.map((s) => s.name)));
+				if (launched || !prev.open || prev.hit === null || prev.hit.trigger !== hit.trigger) this.menu.set(seedGroups(this.menu.getSnapshot(), roster));
 				this.reduce({
 					type: "hit",
 					hit
@@ -314,7 +361,7 @@ window.__ModuleLoader__.load({
 				this.stopFetch();
 				this.hit = hit;
 				this.launcher.set(source);
-				this.menu.set(seedGroups(this.menu.getSnapshot(), [source]));
+				this.menu.set(seedGroups(this.menu.getSnapshot(), [match]));
 				this.reduce({
 					type: "hit",
 					hit
@@ -421,15 +468,17 @@ window.__ModuleLoader__.load({
 			* input machine applies it inside the same submit attempt — no event).
 			* @param line - trimmed draft; the leading char selects the trigger roster.
 			* @param signal - attempt-scoped abort from the input machine.
+			* @param envelope - non-text submission state accompanying the draft.
 			* @returns the winning outcome or undefined (default sink). Rejects when a
-			* polled source's warmup fails — the caller must not silently downgrade.
+			* polled source's warmup fails or the winning source refuses the envelope —
+			* the caller must not silently downgrade.
 			*/
-			async adjudicate(line, signal) {
+			async adjudicate(line, signal, envelope) {
 				const projection = this.project();
 				for (const src of this.deps.roster.all()) {
 					if (signal.aborted) throw signal.reason instanceof Error ? signal.reason : /* @__PURE__ */ new Error("slash adjudication aborted");
 					if (src.matchEnter === void 0 || !line.startsWith(src.trigger)) continue;
-					const outcome = await src.matchEnter(projection, line, signal);
+					const outcome = await src.matchEnter(projection, line, signal, envelope);
 					if (outcome !== void 0) return outcome;
 				}
 			}
@@ -490,7 +539,8 @@ window.__ModuleLoader__.load({
 				}) === true;
 				if ("text" in outcome) return actx.bail(actx, "slash/input-insert-text", {
 					text: outcome.text,
-					span
+					span,
+					...outcome.continue === true ? { continue: true } : {}
 				}) === true;
 				return actx.bail(actx, "slash/input-insert-reference", {
 					reference: outcome.insert,
@@ -532,6 +582,7 @@ window.__ModuleLoader__.load({
 				const projection = this.project();
 				for (const source of roster) source.candidates(projection, {
 					query: hit.query,
+					quoted: hit.quoted,
 					position: hit.position,
 					signal: controller.signal
 				}).then((items) => {
@@ -663,7 +714,7 @@ window.__ModuleLoader__.load({
 		}
 		//#endregion
 		//#region \0dsh-css:/home/runner/work/deepseek-harness/deepseek-harness/packages/client/ui-input-trigger/src/client/MenuView.module.css.mjs
-		const css = "._3e4SsG_menu{z-index:100;--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2);border:1px solid var(--dsw-alias-border-inverted);background:var(--dsw-specific-menu);min-width:min(260px,100%);max-width:min(537px,100%);max-height:320px;box-shadow:var(--dsw-shadow-lv3);border-radius:12px;flex-direction:column;padding:4px;display:flex;position:absolute;bottom:calc(100% + 4px);left:0;overflow:hidden}._3e4SsG_viewport{flex-direction:column;min-height:0;display:flex;overflow-y:auto}._3e4SsG_item{cursor:pointer;width:100%;min-height:40px;color:var(--dsw-alias-label-primary);text-align:left;background:0 0;border:none;border-radius:10px;align-items:center;gap:8px;padding:8px 10px;font-size:14px;line-height:22px;display:flex}._3e4SsG_item:hover,._3e4SsG_item._3e4SsG_active{background:var(--dsw-alias-interactive-bg-hover)}._3e4SsG_itemIcon{width:16px;height:16px;color:var(--dsw-alias-label-tertiary);flex:none;justify-content:center;align-items:center;display:inline-flex}._3e4SsG_itemName{text-overflow:ellipsis;white-space:nowrap;flex:none;max-width:40%;overflow:hidden}._3e4SsG_itemDescription{text-overflow:ellipsis;white-space:nowrap;min-width:0;color:var(--dsw-alias-label-tertiary);flex:1;overflow:hidden}._3e4SsG_groupTitle{color:var(--dsw-alias-label-tertiary);padding:8px 10px;font-size:12px;line-height:16px}._3e4SsG_loading{min-height:40px;color:var(--dsw-alias-label-dimmed);align-items:center;padding:8px 10px;font-size:14px;line-height:22px;display:flex}";
+		const css = "._3e4SsG_menu{z-index:100;--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2);border:1px solid var(--dsw-alias-border-inverted);background:var(--dsw-specific-menu);min-width:min(260px,100%);max-width:min(537px,100%);max-height:320px;box-shadow:var(--dsw-shadow-lv3);border-radius:12px;flex-direction:column;padding:4px;display:flex;position:absolute;bottom:calc(100% + 4px);left:0;overflow:hidden}._3e4SsG_viewport{flex-direction:column;min-height:0;display:flex;overflow-y:auto}._3e4SsG_item{cursor:pointer;width:100%;min-height:40px;color:var(--dsw-alias-label-primary);text-align:left;background:0 0;border:none;border-radius:10px;align-items:center;gap:8px;padding:8px 10px;font-size:14px;line-height:22px;display:flex}._3e4SsG_item:hover,._3e4SsG_item._3e4SsG_active{background:var(--dsw-alias-interactive-bg-hover)}._3e4SsG_sectionTitle{min-height:26px;color:var(--dsw-alias-label-tertiary);flex:none;padding:6px 10px 2px;font-size:12px;font-weight:500;line-height:18px}._3e4SsG_sectionTitle:not(:first-child){margin-top:4px}._3e4SsG_itemIcon{width:16px;height:16px;color:var(--dsw-alias-label-tertiary);flex:none;justify-content:center;align-items:center;display:inline-flex}._3e4SsG_itemName{text-overflow:ellipsis;white-space:nowrap;flex:none;max-width:40%;overflow:hidden}._3e4SsG_itemDescription{text-overflow:ellipsis;white-space:nowrap;min-width:0;color:var(--dsw-alias-label-tertiary);flex:1;overflow:hidden}._3e4SsG_groupTitle{color:var(--dsw-alias-label-tertiary);padding:8px 10px;font-size:12px;line-height:16px}._3e4SsG_loading{min-height:40px;color:var(--dsw-alias-label-dimmed);align-items:center;padding:8px 10px;font-size:14px;line-height:22px;display:flex}";
 		const tagId = "@deepseek-ai/dsh-client-ui-input-trigger/MenuView.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
 			const tag = document.createElement("style");
@@ -673,15 +724,16 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var MenuView_module_css_default = {
+			"active": "_3e4SsG_active",
+			"groupTitle": "_3e4SsG_groupTitle",
 			"item": "_3e4SsG_item",
-			"viewport": "_3e4SsG_viewport",
+			"itemDescription": "_3e4SsG_itemDescription",
+			"itemIcon": "_3e4SsG_itemIcon",
+			"itemName": "_3e4SsG_itemName",
 			"loading": "_3e4SsG_loading",
 			"menu": "_3e4SsG_menu",
-			"itemDescription": "_3e4SsG_itemDescription",
-			"groupTitle": "_3e4SsG_groupTitle",
-			"itemName": "_3e4SsG_itemName",
-			"itemIcon": "_3e4SsG_itemIcon",
-			"active": "_3e4SsG_active"
+			"sectionTitle": "_3e4SsG_sectionTitle",
+			"viewport": "_3e4SsG_viewport"
 		};
 		//#endregion
 		//#region lib/types/client/MenuView.js
@@ -737,7 +789,7 @@ window.__ModuleLoader__.load({
 				"aria-activedescendant": highlight !== null ? optionId(highlight.source, highlight.index) : void 0,
 				children: (0, react_jsx_runtime.jsx)("div", {
 					className: MenuView_module_css_default.viewport,
-					children: state.groups.map((group) => group.status === "ready" && group.items.length === 0 ? null : (0, react_jsx_runtime.jsxs)(react.Fragment, { children: [(0, react_jsx_runtime.jsx)("div", {
+					children: state.groups.map((group) => group.status === "ready" && group.items.length === 0 ? null : (0, react_jsx_runtime.jsxs)(react.Fragment, { children: [group.showGroupTitle === false || group.items.some((item) => item.section !== void 0) ? null : (0, react_jsx_runtime.jsx)("div", {
 						className: MenuView_module_css_default.groupTitle,
 						role: "presentation",
 						"data-source": group.source,
@@ -748,7 +800,11 @@ window.__ModuleLoader__.load({
 						children: t("loading")
 					}) : group.items.map((item, index) => {
 						const active = highlight !== null && highlight.source === group.source && highlight.index === index;
-						return (0, react_jsx_runtime.jsxs)("button", {
+						return (0, react_jsx_runtime.jsxs)(react.Fragment, { children: [item.section !== void 0 && item.section !== group.items[index - 1]?.section ? (0, react_jsx_runtime.jsx)("div", {
+							className: MenuView_module_css_default.sectionTitle,
+							role: "presentation",
+							children: item.section
+						}) : null, (0, react_jsx_runtime.jsxs)("button", {
 							id: optionId(group.source, index),
 							type: "button",
 							role: "option",
@@ -773,7 +829,7 @@ window.__ModuleLoader__.load({
 									children: item.description
 								})
 							]
-						}, `${group.source}:${item.name}`);
+						})] }, optionId(group.source, index));
 					})] }, group.source))
 				})
 			});
