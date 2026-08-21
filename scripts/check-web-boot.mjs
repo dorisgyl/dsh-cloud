@@ -19,7 +19,7 @@
 // DOM is involved up to that point, which is why this can be a plain script.
 //
 //   node scripts/check-web-boot.mjs
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { createContext, runInContext } from 'node:vm'
 
@@ -86,6 +86,34 @@ if (queued !== undefined) {
   const exports = queued.factory(reject)
   note(typeof exports?.createClientModuleSystem === 'function' && typeof exports?.apply === 'function',
     'the bootstrap bundle exports the module-system face create() requires')
+}
+
+// The shell's own last step, which is not a module edge and so appears in no
+// manifest: `mountApp` does `ctx.inject(["uiRenderer"], ...)` and waits for that
+// SERVICE. `inject` has no timeout. A roster missing its provider gives a page
+// with every plugin active, an empty console, and a spinner that never stops --
+// which is exactly how this deployment shipped once.
+//
+// The names are read out of the shell rather than listed here, so the day
+// upstream awaits a second service this fails instead of hanging.
+console.log('\nservices the shell waits for before it mounts:')
+const shellDir = join(PUBLIC, 'assets')
+const shellFile = existsSync(shellDir) && readdirSync(shellDir).find((f) => f.startsWith('index-') && f.endsWith('.js'))
+const shell = shellFile ? readFileSync(join(shellDir, shellFile), 'utf8') : ''
+note(shell !== '', 'the shell bundle is present')
+const awaited = new Set()
+for (const call of shell.matchAll(/\.inject\(\[([^\]]{0,200})\]/g)) {
+  for (const quoted of call[1].matchAll(/["']([a-zA-Z][a-zA-Z0-9_.]{1,30})["']/g)) awaited.add(quoted[1])
+}
+note(awaited.size > 0, `the shell awaits ${awaited.size} service(s): ${[...awaited].join(', ') || 'none found'}`)
+const staged = existsSync(join(PUBLIC, 'client'))
+  ? readdirSync(join(PUBLIC, 'client')).map((f) => ({ file: f, text: readFileSync(join(PUBLIC, 'client', f), 'utf8') }))
+  : []
+for (const service of awaited) {
+  // Mentioning the name is a weak test and a sufficient one: a service nothing
+  // in the roster even names cannot be provided by it.
+  const providers = staged.filter((b) => b.text.includes(service)).map((b) => b.file.replace('.js', ''))
+  note(providers.length > 0, `${service} is named by a staged bundle (${providers.slice(0, 3).join(', ') || 'NOBODY'})`)
 }
 
 console.log('\nthe graph the loader will fetch:')
