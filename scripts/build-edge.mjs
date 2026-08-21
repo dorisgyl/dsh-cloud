@@ -55,6 +55,17 @@ if (existsSync(examples)) {
 // After the shell is staged, because it writes into the same public directory.
 await import('./build-client.mjs')
 
+// --- does the page boot ------------------------------------------------------
+// A gate, in the build, because the alternative was tried: upstream 0.1.0-rc.8
+// changed the browser's boot protocol, every check in this repository passed,
+// and the deployment served a blank page reading "window.__ModuleLoader__
+// bootstrap facade is missing". Nothing here had ever looked at the browser.
+//
+// This runs the prelude U1 injects and asserts the page reaches the state the
+// shell demands. It costs milliseconds and it is the only thing between a green
+// build and that page.
+await import('./check-web-boot.mjs')
+
 // --- the Worker -------------------------------------------------------------
 await esbuild.build({
   entryPoints: [join(root, 'units/edge/src/index.mjs')],

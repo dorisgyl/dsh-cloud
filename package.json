@@ -7,6 +7,7 @@
     "clean": "node scripts/clean.mjs",
     "m0:bundle": "node scripts/m0-bundle.mjs",
     "check:seams": "node scripts/check-seam-shapes.mjs",
+    "check:web-boot": "node scripts/check-web-boot.mjs",
     "build:edge": "node scripts/build-edge.mjs",
     "deploy:edge": "node scripts/build-edge.mjs && npx wrangler deploy --config units/edge/wrangler.jsonc",
     "deploy:do": "node scripts/m0-bundle.mjs && npx wrangler deploy --config units/session-do/wrangler.jsonc",
