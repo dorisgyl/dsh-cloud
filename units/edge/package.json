@@ -26,6 +26,7 @@
     "@deepseek-ai/dsh-client-ui-permission-presets": "0.1.0-rc.8",
     "@deepseek-ai/dsh-client-ui-plan": "0.1.0-rc.8",
     "@deepseek-ai/dsh-client-ui-primitives": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-renderer": "0.1.0-rc.8",
     "@deepseek-ai/dsh-client-ui-settings": "0.1.0-rc.8",
     "@deepseek-ai/dsh-client-ui-settings-general": "0.1.0-rc.8",
     "@deepseek-ai/dsh-client-ui-settings-models": "0.1.0-rc.8",

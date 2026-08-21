@@ -124,9 +124,24 @@ const EXCLUDE = new Map([
 // dsh-typert-registry and dsh-cordis-client-runner all declare
 // `dsh.client.platform === "web"` and ship lib/client.js under server-shaped
 // names. Upstream's own registry scans declarations for exactly this reason.
-const candidates = Object.keys(
-  JSON.parse(readFileSync('./scripts/upstream-closure.json', 'utf8')).packages,
-)
+//
+// The closure is a CRAWL, and a crawl has a date. `upstream-closure.json` was
+// taken at 0.1.0-rc.6, so a package upstream added later could not appear in
+// the roster no matter what was installed -- and one of them was
+// `dsh-client-ui-renderer`, which provides the `uiRenderer` service the shell
+// awaits as its final boot step. `ctx.inject()` waits without a timeout, so the
+// page sat on "Loading plugins…" with every plugin active, nothing in the
+// console, and nothing to read.
+//
+// So the crawl is one source and not the only one: the packages a unit
+// DECLARES are candidates too. Installing a client package is now enough to
+// have it considered, which is what everyone already assumed was true.
+const declared = ['../units/edge/package.json', '../units/session-do/package.json']
+  .flatMap((rel) => Object.keys(JSON.parse(readFileSync(new URL(rel, import.meta.url), 'utf8')).dependencies ?? {}))
+const candidates = [...new Set([
+  ...Object.keys(JSON.parse(readFileSync('./scripts/upstream-closure.json', 'utf8')).packages),
+  ...declared,
+])]
 
 mkdirSync(CLIENT_DIR, { recursive: true })
 
