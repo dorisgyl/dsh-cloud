@@ -11,7 +11,7 @@
 // prose, which nothing downstream parses. The agent then looks like it replied
 // when in fact it asked to run something. So tools go out in the request and
 // tool calls come back as `tool-call` blocks, not text.
-import { LlmAdapter } from '@deepseek-ai/dsh-llm'
+import { LlmAdapter, projectImagesForTextModel } from '@deepseek-ai/dsh-llm'
 
 // Cloudflare hosts DeepSeek's own models, which is the right default for
 // DeepSeek's own harness. They are paid-plan only, and the error says so only
@@ -33,7 +33,19 @@ function toChatMessages(options) {
   const messages = []
   if (options.system) messages.push({ role: 'system', content: options.system })
 
-  for (const message of options.messages ?? []) {
+  // Say the image is gone rather than drop it.
+  //
+  // Everything below filters content to text blocks, so an image reached the
+  // model as nothing at all: a user who pasted a screenshot and asked "what is
+  // wrong here" got an answer to a question with no picture in it, and no
+  // sign anything was missing. Upstream 0.1.1 added the projection for exactly
+  // this -- each image becomes `[image omitted because this model accepts text
+  // only; attachment sha256:...]`, nested tool results included -- so the model
+  // can say it cannot see the image instead of guessing about it.
+  //
+  // Unconditional because this adapter is text-only by construction; the day a
+  // vision model is bound to it, this and `inputModalities` change together.
+  for (const message of projectImagesForTextModel(options.messages ?? [])) {
     const blocks = message.content ?? []
 
     // A tool result is its own message, correlated by the call id. Folding it
