@@ -6,11 +6,12 @@ window.__ModuleLoader__.load({
 		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 		let react_jsx_runtime = require("react/jsx-runtime");
 		let react = require("react");
+		let react_dom = require("react-dom");
 		let _deepseek_ai_dsh_client_runtime_client = require("@deepseek-ai/dsh-client-runtime/client");
 		let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
-		//#region \0dsh-css:/home/runner/work/deepseek-harness/deepseek-harness/packages/client/ui-subagent/src/client/SubagentCatalogAction.module.css.mjs
-		const css$1 = ".h8S2Va_root{position:relative}.h8S2Va_trigger{min-height:28px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:0;border-radius:6px;align-items:center;gap:3px;padding:3px 2px;font-size:12px;line-height:18px;display:inline-flex}.h8S2Va_count{margin:0 5px}.h8S2Va_activitySlot{flex:none;width:10px;height:10px;display:inline-flex}.h8S2Va_trigger:hover,.h8S2Va_trigger:focus-visible{color:var(--dsw-alias-label-secondary)}.h8S2Va_trigger svg{transition:transform .12s}.h8S2Va_triggerOpen{transform:rotate(180deg)}.h8S2Va_menu{z-index:100;box-sizing:border-box;background:var(--dsw-specific-menu);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2);width:336px;max-width:min(400px,100vw - 32px);max-height:min(560px,100vh - 140px);box-shadow:var(--dsw-shadow-lv3);border-radius:12px;flex-direction:column;padding:4px;display:flex;position:absolute;top:calc(100% + 5px);left:0;overflow:auto}.h8S2Va_node{min-width:0;position:relative}.h8S2Va_menu>.h8S2Va_node{margin-left:-3px}.h8S2Va_row{box-sizing:border-box;width:100%;min-height:50px;color:var(--dsw-alias-label-primary);text-align:left;cursor:pointer;background:0 0;border:0;border-radius:8px;outline:none;align-items:flex-start;gap:8px;padding:7px 8px 7px 11px;font-size:13px;line-height:18px;display:flex;position:relative}.h8S2Va_row:hover>.h8S2Va_clickarea,.h8S2Va_row:focus-visible>.h8S2Va_clickarea{background:var(--dsw-alias-interactive-bg-hover)}.h8S2Va_clickarea{box-sizing:border-box;border-radius:8px;flex:1;align-self:stretch;align-items:flex-start;gap:8px;min-width:0;margin:-7px -8px;padding:7px 8px;display:flex}.h8S2Va_row>[data-state],.h8S2Va_clickarea>[data-state]{margin-top:4px}.h8S2Va_disabled{color:var(--dsw-alias-label-dimmed);cursor:not-allowed}.h8S2Va_disabled:hover{background:0 0}.h8S2Va_loadingRow{cursor:default}.h8S2Va_disclosure,.h8S2Va_disclosureSpace{flex:none;width:14px;height:18px}.h8S2Va_disclosure{color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:0;justify-content:center;align-items:center;padding:0;transition:transform .12s;display:inline-flex}.h8S2Va_disclosure:hover{color:var(--dsw-alias-label-primary)}.h8S2Va_disclosureOpen{transform:rotate(90deg)}.h8S2Va_content{flex-direction:column;flex:1;min-width:0;display:flex}.h8S2Va_label,.h8S2Va_summary{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.h8S2Va_label{color:inherit;font-weight:400}.h8S2Va_summary,.h8S2Va_metrics{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}.h8S2Va_metrics{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;flex:none;grid-template-rows:18px 16px;display:grid}.h8S2Va_metricToken{grid-row:1;line-height:18px}.h8S2Va_metricDuration{grid-row:2}.h8S2Va_children{margin-left:18px;padding-left:4px;position:relative}.h8S2Va_children:before,.h8S2Va_children>.h8S2Va_node:before{content:\"\";border-left:1px solid var(--dsw-alias-border-l2);position:absolute;left:0}.h8S2Va_children:before{height:26px;top:-26px}.h8S2Va_children[aria-busy=true]:before{content:none}.h8S2Va_children>.h8S2Va_node:before{top:0;bottom:0;left:-4px}.h8S2Va_children>.h8S2Va_node:last-child:before{height:17px;bottom:auto}.h8S2Va_children>.h8S2Va_node>.h8S2Va_row:before{content:\"\";border-top:1px solid var(--dsw-alias-border-l2);width:14px;position:absolute;top:16px;left:-4px}.h8S2Va_notice,.h8S2Va_error{color:var(--dsw-alias-label-tertiary);padding:10px 12px;font-size:12px;line-height:18px}.h8S2Va_error{color:var(--dsw-alias-state-error-primary);justify-content:space-between;align-items:center;gap:12px;display:flex}.h8S2Va_refresh{color:inherit;cursor:pointer;background:0 0;border:0;border-radius:6px;flex:none;align-items:center;gap:4px;padding:4px 6px;display:inline-flex}.h8S2Va_refresh:hover{background:var(--dsw-alias-interactive-bg-hover)}";
-		const tagId$1 = "@deepseek-ai/dsh-client-ui-subagent/SubagentCatalogAction.module.css";
+		//#region \0dsh-css:/home/runner/work/deepseek-harness/deepseek-harness/packages/client/ui-subagent/src/client/SubagentHeaderLineage.module.css.mjs
+		const css$1 = ".ZKlsPq_root{align-items:center;gap:10px;min-width:0;display:inline-flex;position:relative}.ZKlsPq_switcherRoot{min-width:0;margin-left:6px}.ZKlsPq_trigger,.ZKlsPq_switcherTrigger{min-height:28px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:0;border-radius:6px;align-items:center;padding:3px 2px;font-size:12px;line-height:18px;display:inline-flex}.ZKlsPq_trigger{gap:4px}.ZKlsPq_switcherTrigger{min-width:0;max-width:244px;color:var(--dsw-alias-label-primary);gap:4px;font-weight:500}.ZKlsPq_ancestorSwitcherTrigger{color:var(--dsw-alias-label-tertiary);font-weight:400}.ZKlsPq_switcherTitle{text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;overflow:hidden}.ZKlsPq_switcherTrigger svg{flex:none}.ZKlsPq_separator{color:var(--dsw-alias-label-caption);font-size:14px;line-height:20px}.ZKlsPq_activitySlot{flex:none;width:10px;height:10px;display:inline-flex}.ZKlsPq_trigger:hover,.ZKlsPq_trigger:focus-visible{color:var(--dsw-alias-label-secondary)}.ZKlsPq_switcherTrigger:hover,.ZKlsPq_switcherTrigger:focus-visible{color:var(--dsw-alias-label-primary)}.ZKlsPq_ancestorSwitcherTrigger:hover,.ZKlsPq_ancestorSwitcherTrigger:focus-visible{color:var(--dsw-alias-label-tertiary)}.ZKlsPq_trigger svg,.ZKlsPq_switcherTrigger svg{transition:transform .12s}.ZKlsPq_triggerOpen{transform:rotate(180deg)}.ZKlsPq_menu{z-index:100;box-sizing:border-box;background:var(--dsw-specific-menu);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2);width:336px;max-width:min(400px,100vw - 32px);max-height:min(560px,100vh - 140px);box-shadow:var(--dsw-shadow-lv3);border-radius:12px;flex-direction:column;padding:4px;display:flex;position:fixed;overflow:auto}.ZKlsPq_node{min-width:0;position:relative}.ZKlsPq_menu>.ZKlsPq_node{margin-left:-3px}.ZKlsPq_row{box-sizing:border-box;width:100%;min-height:50px;color:var(--dsw-alias-label-primary);text-align:left;cursor:pointer;background:0 0;border:0;border-radius:8px;outline:none;align-items:flex-start;gap:8px;padding:7px 8px 7px 11px;font-size:13px;line-height:18px;display:flex;position:relative}.ZKlsPq_row:hover>.ZKlsPq_clickarea,.ZKlsPq_row:focus-visible>.ZKlsPq_clickarea{background:var(--dsw-alias-interactive-bg-hover)}.ZKlsPq_clickarea{box-sizing:border-box;border-radius:8px;flex:1;align-self:stretch;align-items:flex-start;gap:8px;min-width:0;margin:-7px -8px;padding:7px 8px;display:flex}.ZKlsPq_row>[data-state],.ZKlsPq_clickarea>[data-state]{margin-top:4px}.ZKlsPq_disabled{color:var(--dsw-alias-label-dimmed);cursor:not-allowed}.ZKlsPq_disabled:hover{background:0 0}.ZKlsPq_loadingRow{cursor:default}.ZKlsPq_disclosure,.ZKlsPq_disclosureSpace{flex:none;width:14px;height:18px}.ZKlsPq_disclosure{color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:0;justify-content:center;align-items:center;padding:0;transition:transform .12s;display:inline-flex}.ZKlsPq_disclosure:hover{color:var(--dsw-alias-label-primary)}.ZKlsPq_disclosureOpen{transform:rotate(90deg)}.ZKlsPq_content{flex-direction:column;flex:1;min-width:0;display:flex}.ZKlsPq_label,.ZKlsPq_summary{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.ZKlsPq_label{color:inherit;font-weight:400}.ZKlsPq_currentLabel{font-weight:600}.ZKlsPq_summary,.ZKlsPq_metrics{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:16px}.ZKlsPq_metrics{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;flex:none;grid-template-rows:18px 16px;display:grid}.ZKlsPq_metricToken{grid-row:1;line-height:18px}.ZKlsPq_metricDuration{grid-row:2}.ZKlsPq_children{margin-left:18px;padding-left:4px;position:relative}.ZKlsPq_children:before,.ZKlsPq_children>.ZKlsPq_node:before{content:\"\";border-left:1px solid var(--dsw-alias-border-l2);position:absolute;left:0}.ZKlsPq_children:before{height:26px;top:-26px}.ZKlsPq_children[aria-busy=true]:before{content:none}.ZKlsPq_children>.ZKlsPq_node:before{top:0;bottom:0;left:-4px}.ZKlsPq_children>.ZKlsPq_node:last-child:before{height:17px;bottom:auto}.ZKlsPq_children>.ZKlsPq_node>.ZKlsPq_row:before{content:\"\";border-top:1px solid var(--dsw-alias-border-l2);width:14px;position:absolute;top:16px;left:-4px}.ZKlsPq_notice,.ZKlsPq_error{color:var(--dsw-alias-label-tertiary);padding:10px 12px;font-size:12px;line-height:18px}.ZKlsPq_error{color:var(--dsw-alias-state-error-primary);justify-content:space-between;align-items:center;gap:12px;display:flex}.ZKlsPq_refresh{color:inherit;cursor:pointer;background:0 0;border:0;border-radius:6px;flex:none;align-items:center;gap:4px;padding:4px 6px;display:inline-flex}.ZKlsPq_refresh:hover{background:var(--dsw-alias-interactive-bg-hover)}";
+		const tagId$1 = "@deepseek-ai/dsh-client-ui-subagent/SubagentHeaderLineage.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId$1) + "]") === null) {
 			const tag = document.createElement("style");
 			tag.dataset.plugin = "@deepseek-ai/dsh-client-ui-subagent";
@@ -18,34 +19,39 @@ window.__ModuleLoader__.load({
 			tag.textContent = css$1;
 			document.head.appendChild(tag);
 		}
-		var SubagentCatalogAction_module_css_default = {
-			"activitySlot": "h8S2Va_activitySlot",
-			"children": "h8S2Va_children",
-			"clickarea": "h8S2Va_clickarea",
-			"content": "h8S2Va_content",
-			"count": "h8S2Va_count",
-			"disabled": "h8S2Va_disabled",
-			"disclosure": "h8S2Va_disclosure",
-			"disclosureOpen": "h8S2Va_disclosureOpen",
-			"disclosureSpace": "h8S2Va_disclosureSpace",
-			"error": "h8S2Va_error",
-			"label": "h8S2Va_label",
-			"loadingRow": "h8S2Va_loadingRow",
-			"menu": "h8S2Va_menu",
-			"metricDuration": "h8S2Va_metricDuration",
-			"metricToken": "h8S2Va_metricToken",
-			"metrics": "h8S2Va_metrics",
-			"node": "h8S2Va_node",
-			"notice": "h8S2Va_notice",
-			"refresh": "h8S2Va_refresh",
-			"root": "h8S2Va_root",
-			"row": "h8S2Va_row",
-			"summary": "h8S2Va_summary",
-			"trigger": "h8S2Va_trigger",
-			"triggerOpen": "h8S2Va_triggerOpen"
+		var SubagentHeaderLineage_module_css_default = {
+			"activitySlot": "ZKlsPq_activitySlot",
+			"ancestorSwitcherTrigger": "ZKlsPq_ancestorSwitcherTrigger",
+			"children": "ZKlsPq_children",
+			"clickarea": "ZKlsPq_clickarea",
+			"content": "ZKlsPq_content",
+			"currentLabel": "ZKlsPq_currentLabel",
+			"disabled": "ZKlsPq_disabled",
+			"disclosure": "ZKlsPq_disclosure",
+			"disclosureOpen": "ZKlsPq_disclosureOpen",
+			"disclosureSpace": "ZKlsPq_disclosureSpace",
+			"error": "ZKlsPq_error",
+			"label": "ZKlsPq_label",
+			"loadingRow": "ZKlsPq_loadingRow",
+			"menu": "ZKlsPq_menu",
+			"metricDuration": "ZKlsPq_metricDuration",
+			"metricToken": "ZKlsPq_metricToken",
+			"metrics": "ZKlsPq_metrics",
+			"node": "ZKlsPq_node",
+			"notice": "ZKlsPq_notice",
+			"refresh": "ZKlsPq_refresh",
+			"root": "ZKlsPq_root",
+			"row": "ZKlsPq_row",
+			"separator": "ZKlsPq_separator",
+			"summary": "ZKlsPq_summary",
+			"switcherRoot": "ZKlsPq_switcherRoot",
+			"switcherTitle": "ZKlsPq_switcherTitle",
+			"switcherTrigger": "ZKlsPq_switcherTrigger",
+			"trigger": "ZKlsPq_trigger",
+			"triggerOpen": "ZKlsPq_triggerOpen"
 		};
 		//#endregion
-		//#region lib/types/client/SubagentCatalogAction.js
+		//#region lib/types/client/SubagentHeaderLineage.js
 		function diagnosticReason(entry, t) {
 			switch (entry.reason) {
 				case "corrupt": return t("diagnostic.corrupt");
@@ -137,28 +143,46 @@ window.__ModuleLoader__.load({
 			count: 0,
 			runningCount: 0
 		};
+		function SubagentSwitcherIcon() {
+			return (0, react_jsx_runtime.jsxs)("svg", {
+				width: "16",
+				height: "16",
+				viewBox: "0 0 20 20",
+				fill: "none",
+				"aria-hidden": "true",
+				children: [(0, react_jsx_runtime.jsx)("path", {
+					d: "M5.99951 12.7L8.95546 14.9478C9.40011 15.2859 9.62244 15.455 9.87526 15.488C9.95774 15.4988 10.0413 15.4988 10.1238 15.488C10.3766 15.455 10.5989 15.2859 11.0436 14.9478L13.9995 12.7",
+					stroke: "currentColor",
+					strokeWidth: "1.5"
+				}), (0, react_jsx_runtime.jsx)("path", {
+					d: "M13.9995 7.7417L11.0436 5.49387C10.5989 5.15574 10.3766 4.98668 10.1238 4.95362C10.0413 4.94283 9.95775 4.94283 9.87527 4.95362C9.62245 4.98668 9.40012 5.15574 8.95547 5.49387L5.99952 7.7417",
+					stroke: "currentColor",
+					strokeWidth: "1.5"
+				})]
+			});
+		}
 		/** Render the known direct-child shape while its authoritative catalog hydrates. */
 		function CatalogLoadingRows({ parentSessionId, summaries, level, t }) {
 			const children = Object.values(summaries).filter((summary) => summary.origin === "subagent" && summary.parentId === parentSessionId);
 			if (children.length === 0) return (0, react_jsx_runtime.jsx)("div", {
-				className: SubagentCatalogAction_module_css_default.notice,
+				className: SubagentHeaderLineage_module_css_default.notice,
 				children: t("loading.label")
 			});
 			return children.map((summary) => (0, react_jsx_runtime.jsx)("div", {
-				className: SubagentCatalogAction_module_css_default.node,
+				className: SubagentHeaderLineage_module_css_default.node,
 				children: (0, react_jsx_runtime.jsxs)("div", {
 					role: "treeitem",
 					"aria-disabled": "true",
 					"aria-level": level,
 					"aria-label": t("loading.aria"),
-					className: `${SubagentCatalogAction_module_css_default.row} ${SubagentCatalogAction_module_css_default.disabled} ${SubagentCatalogAction_module_css_default.loadingRow}`,
+					className: `${SubagentHeaderLineage_module_css_default.row} ${SubagentHeaderLineage_module_css_default.disabled} ${SubagentHeaderLineage_module_css_default.loadingRow}`,
 					children: [
-						(0, react_jsx_runtime.jsx)("span", { className: SubagentCatalogAction_module_css_default.disclosureSpace }),
+						(0, react_jsx_runtime.jsx)("span", { className: SubagentHeaderLineage_module_css_default.disclosureSpace }),
 						(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.StateDot, { state: summary.running ? "ongoing" : "done" }),
 						(0, react_jsx_runtime.jsx)("span", {
-							className: SubagentCatalogAction_module_css_default.content,
+							className: SubagentHeaderLineage_module_css_default.content,
 							children: (0, react_jsx_runtime.jsx)("span", {
-								className: SubagentCatalogAction_module_css_default.label,
+								className: SubagentHeaderLineage_module_css_default.label,
 								children: t("loading.label")
 							})
 						})
@@ -167,7 +191,7 @@ window.__ModuleLoader__.load({
 			}, summary.id));
 		}
 		/** Render one catalog level and recurse only through explicitly expanded rows. */
-		function CatalogRows({ parentSessionId, catalog, catalogs, summaries, expanded, level, now, openChild, refresh, toggleBranch, closeCatalog, t }) {
+		function CatalogRows({ parentSessionId, currentSessionId, catalog, catalogs, summaries, expanded, level, now, openChild, refresh, toggleBranch, closeCatalog, t }) {
 			const emptyLoading = catalog.state === "loading" && catalog.entries.length === 0;
 			const reserveDisclosure = catalog.entries.some((entry) => entry.kind === "child" && entry.hasChildren);
 			return (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
@@ -178,10 +202,10 @@ window.__ModuleLoader__.load({
 					t
 				}),
 				catalog.state === "error" && (0, react_jsx_runtime.jsxs)("div", {
-					className: SubagentCatalogAction_module_css_default.error,
+					className: SubagentHeaderLineage_module_css_default.error,
 					children: [(0, react_jsx_runtime.jsx)("span", { children: catalog.error?.message ?? t("load.error") }), (0, react_jsx_runtime.jsxs)("button", {
 						type: "button",
-						className: SubagentCatalogAction_module_css_default.refresh,
+						className: SubagentHeaderLineage_module_css_default.refresh,
 						onClick: () => {
 							refresh(parentSessionId);
 						},
@@ -192,24 +216,24 @@ window.__ModuleLoader__.load({
 					if (entry.kind === "diagnostic") {
 						const reason = diagnosticReason(entry, t);
 						return (0, react_jsx_runtime.jsx)("div", {
-							className: SubagentCatalogAction_module_css_default.node,
+							className: SubagentHeaderLineage_module_css_default.node,
 							children: (0, react_jsx_runtime.jsxs)("div", {
 								role: "treeitem",
 								"aria-disabled": "true",
 								"aria-level": level,
 								"aria-label": `${entry.id} ${reason}`,
-								className: `${SubagentCatalogAction_module_css_default.row} ${SubagentCatalogAction_module_css_default.disabled}`,
+								className: `${SubagentHeaderLineage_module_css_default.row} ${SubagentHeaderLineage_module_css_default.disabled}`,
 								title: reason,
 								children: [
-									reserveDisclosure && (0, react_jsx_runtime.jsx)("span", { className: SubagentCatalogAction_module_css_default.disclosureSpace }),
+									reserveDisclosure && (0, react_jsx_runtime.jsx)("span", { className: SubagentHeaderLineage_module_css_default.disclosureSpace }),
 									(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.StateDot, { state: "error" }),
 									(0, react_jsx_runtime.jsxs)("span", {
-										className: SubagentCatalogAction_module_css_default.content,
+										className: SubagentHeaderLineage_module_css_default.content,
 										children: [(0, react_jsx_runtime.jsx)("span", {
-											className: SubagentCatalogAction_module_css_default.label,
+											className: SubagentHeaderLineage_module_css_default.label,
 											children: entry.id
 										}), (0, react_jsx_runtime.jsx)("span", {
-											className: SubagentCatalogAction_module_css_default.summary,
+											className: SubagentHeaderLineage_module_css_default.summary,
 											children: reason
 										})]
 									})
@@ -218,6 +242,7 @@ window.__ModuleLoader__.load({
 						}, entry.id);
 					}
 					const childCatalog = catalogs[entry.id];
+					const isCurrent = entry.id === currentSessionId;
 					const isExpanded = expanded.has(entry.id);
 					const knownLeaf = !entry.hasChildren;
 					const childLoading = childCatalog === void 0 || childCatalog.state === "loading" && childCatalog.entries.length === 0;
@@ -263,48 +288,49 @@ window.__ModuleLoader__.load({
 						toggleBranch(entry.id);
 					};
 					return (0, react_jsx_runtime.jsxs)("div", {
-						className: SubagentCatalogAction_module_css_default.node,
+						className: SubagentHeaderLineage_module_css_default.node,
 						children: [(0, react_jsx_runtime.jsxs)("div", {
 							role: "treeitem",
 							tabIndex: 0,
 							"aria-level": level,
+							"aria-current": isCurrent || void 0,
 							"aria-label": [
 								label,
 								secondary,
 								metrics
 							].filter((value) => value !== "").join(" "),
 							...knownLeaf ? {} : { "aria-expanded": isExpanded },
-							className: SubagentCatalogAction_module_css_default.row,
+							className: SubagentHeaderLineage_module_css_default.row,
 							onClick: open,
 							onKeyDown: handleKey,
-							children: [knownLeaf ? reserveDisclosure && (0, react_jsx_runtime.jsx)("span", { className: SubagentCatalogAction_module_css_default.disclosureSpace }) : (0, react_jsx_runtime.jsx)("button", {
+							children: [knownLeaf ? reserveDisclosure && (0, react_jsx_runtime.jsx)("span", { className: SubagentHeaderLineage_module_css_default.disclosureSpace }) : (0, react_jsx_runtime.jsx)("button", {
 								type: "button",
 								tabIndex: -1,
-								className: `${SubagentCatalogAction_module_css_default.disclosure} ${isExpanded ? SubagentCatalogAction_module_css_default.disclosureOpen : ""}`,
+								className: `${SubagentHeaderLineage_module_css_default.disclosure} ${isExpanded ? SubagentHeaderLineage_module_css_default.disclosureOpen : ""}`,
 								"aria-label": t(isExpanded ? "branch.collapse" : "branch.expand", { label }),
 								onClick: toggle,
 								children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronRightOutline14, {})
 							}), (0, react_jsx_runtime.jsxs)("div", {
-								className: SubagentCatalogAction_module_css_default.clickarea,
+								className: SubagentHeaderLineage_module_css_default.clickarea,
 								children: [
 									(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.StateDot, { state: entry.activity === "running" ? "ongoing" : "done" }),
 									(0, react_jsx_runtime.jsxs)("span", {
-										className: SubagentCatalogAction_module_css_default.content,
+										className: SubagentHeaderLineage_module_css_default.content,
 										children: [(0, react_jsx_runtime.jsx)("span", {
-											className: SubagentCatalogAction_module_css_default.label,
+											className: `${SubagentHeaderLineage_module_css_default.label} ${isCurrent ? SubagentHeaderLineage_module_css_default.currentLabel : ""}`,
 											children: label
 										}), (0, react_jsx_runtime.jsx)("span", {
-											className: SubagentCatalogAction_module_css_default.summary,
+											className: SubagentHeaderLineage_module_css_default.summary,
 											children: secondary
 										})]
 									}),
 									metrics !== "" && (0, react_jsx_runtime.jsxs)("span", {
-										className: SubagentCatalogAction_module_css_default.metrics,
+										className: SubagentHeaderLineage_module_css_default.metrics,
 										children: [tokenMetric !== void 0 && (0, react_jsx_runtime.jsx)("span", {
-											className: SubagentCatalogAction_module_css_default.metricToken,
+											className: SubagentHeaderLineage_module_css_default.metricToken,
 											children: tokenMetric
 										}), durationMetric !== void 0 && (0, react_jsx_runtime.jsx)("span", {
-											className: SubagentCatalogAction_module_css_default.metricDuration,
+											className: SubagentHeaderLineage_module_css_default.metricDuration,
 											title: t("duration.exactTitle", { duration: durationMetric.exact }),
 											children: durationMetric.compact
 										})]
@@ -313,7 +339,7 @@ window.__ModuleLoader__.load({
 							})]
 						}), isExpanded && !knownLeaf && (0, react_jsx_runtime.jsx)("div", {
 							role: "group",
-							className: SubagentCatalogAction_module_css_default.children,
+							className: SubagentHeaderLineage_module_css_default.children,
 							"aria-busy": childLoading || void 0,
 							children: childCatalog === void 0 ? (0, react_jsx_runtime.jsx)(CatalogLoadingRows, {
 								parentSessionId: entry.id,
@@ -322,6 +348,7 @@ window.__ModuleLoader__.load({
 								t
 							}) : (0, react_jsx_runtime.jsx)(CatalogRows, {
 								parentSessionId: entry.id,
+								currentSessionId,
 								catalog: childCatalog,
 								catalogs,
 								summaries,
@@ -339,34 +366,58 @@ window.__ModuleLoader__.load({
 				})
 			] });
 		}
-		/**
-		* Render the current session's direct catalog and lazily expanded descendants.
-		* @param props - session standard props plus catalog navigation actions.
-		* @returns The action while the catalog is pending or summaries establish descendants.
-		*/
-		function SubagentCatalogAction({ sessionId, useSessions, openChild, refresh, setCatalogOpen, t }) {
+		const MENU_VIEWPORT_MARGIN = 16;
+		/** Place a portaled catalog below its trigger without crossing the viewport edge. */
+		function catalogMenuPosition(trigger) {
+			const rect = trigger.getBoundingClientRect();
+			const width = Math.min(336, window.innerWidth - MENU_VIEWPORT_MARGIN * 2);
+			return {
+				top: rect.bottom + 5,
+				left: Math.min(Math.max(MENU_VIEWPORT_MARGIN, rect.left), window.innerWidth - width - MENU_VIEWPORT_MARGIN)
+			};
+		}
+		/** One trigger-plus-tree dropdown over the catalog rooted at `rootSessionId`. */
+		function CatalogDropdown({ rootSessionId, currentSessionId, displayTitle, openTitle, variant, separator = false, useSessions, openChild, refresh, setCatalogOpen, t }) {
+			const ancestorSwitcher = variant === "switcher" && openTitle !== void 0;
 			const catalogs = useSessions((state) => state.subagentsByParent);
 			const summaries = useSessions((state) => state.byId);
-			const catalog = catalogs[sessionId];
+			const catalog = catalogs[rootSessionId];
 			const [open, setOpen] = (0, react.useState)(false);
+			const [menuPosition, setMenuPosition] = (0, react.useState)();
 			const [now, setNow] = (0, react.useState)(() => Date.now());
 			const [expanded, setExpanded] = (0, react.useState)(() => /* @__PURE__ */ new Set());
 			const rootRef = (0, react.useRef)(null);
 			const triggerRef = (0, react.useRef)(null);
+			const menuRef = (0, react.useRef)(null);
+			const hoverOpenTimer = (0, react.useRef)(void 0);
+			const hoverCloseTimer = (0, react.useRef)(void 0);
 			const observedCatalogs = (0, react.useRef)(/* @__PURE__ */ new Set());
+			const requestedInitialCatalog = (0, react.useRef)();
 			const setCatalogOpenRef = (0, react.useRef)(setCatalogOpen);
 			setCatalogOpenRef.current = setCatalogOpen;
+			const currentEntry = currentSessionId === void 0 ? void 0 : catalog?.entries.find((entry) => entry.kind === "child" && entry.id === currentSessionId);
+			const switcherDisplayTitle = currentEntry?.kind === "child" ? currentEntry.label ?? currentEntry.id : displayTitle;
 			const healthy = catalog?.entries.filter((entry) => entry.kind === "child") ?? [];
-			const descendants = (0, react.useMemo)(() => (0, _deepseek_ai_dsh_client_runtime_client.indexSubagentDescendants)(summaries).get(sessionId) ?? NO_DESCENDANTS, [sessionId, summaries]);
+			const descendants = (0, react.useMemo)(() => (0, _deepseek_ai_dsh_client_runtime_client.indexSubagentDescendants)(summaries).get(rootSessionId) ?? NO_DESCENDANTS, [rootSessionId, summaries]);
 			const descendantCount = Math.max(healthy.length, descendants.count);
 			const totalCountKey = descendantCount === 1 ? "count.total.one" : "count.total.other";
 			const runningCountKey = descendants.runningCount === 1 ? "count.running.one" : "count.running.other";
-			const presentedCatalog = descendants.count > 0 && (catalog === void 0 || catalog.state === "ready" && catalog.entries.length === 0) ? {
+			const presentedCatalog = (descendants.count > 0 || variant === "switcher") && (catalog === void 0 || catalog.state === "ready" && catalog.entries.length === 0) ? {
 				entries: [],
 				parentAvailable: catalog?.parentAvailable ?? false,
 				state: "loading",
 				error: null
 			} : catalog;
+			(0, react.useEffect)(() => {
+				if (variant !== "switcher" || catalog !== void 0 || requestedInitialCatalog.current === rootSessionId) return;
+				requestedInitialCatalog.current = rootSessionId;
+				refresh(rootSessionId);
+			}, [
+				catalog,
+				refresh,
+				rootSessionId,
+				variant
+			]);
 			const observeCatalog = (parentSessionId, next) => {
 				if (next) observedCatalogs.current.add(parentSessionId);
 				else observedCatalogs.current.delete(parentSessionId);
@@ -377,15 +428,52 @@ window.__ModuleLoader__.load({
 				observedCatalogs.current.clear();
 				setExpanded(/* @__PURE__ */ new Set());
 			};
+			const cancelHoverClose = () => {
+				if (hoverCloseTimer.current === void 0) return;
+				clearTimeout(hoverCloseTimer.current);
+				hoverCloseTimer.current = void 0;
+			};
+			const cancelHoverOpen = () => {
+				if (hoverOpenTimer.current === void 0) return;
+				clearTimeout(hoverOpenTimer.current);
+				hoverOpenTimer.current = void 0;
+			};
 			const changeOpen = (next, restoreFocus = false) => {
-				setOpen(next);
+				cancelHoverOpen();
+				cancelHoverClose();
 				if (next) {
+					const trigger = triggerRef.current;
+					/* v8 ignore next -- a queued callback can outlive the trigger */
+					if (trigger === null) return;
+					setOpen(true);
+					setMenuPosition(catalogMenuPosition(trigger));
 					setNow(Date.now());
-					observeCatalog(sessionId, true);
-				} else closeAllCatalogs();
+					observeCatalog(rootSessionId, true);
+				} else {
+					setOpen(false);
+					setMenuPosition(void 0);
+					closeAllCatalogs();
+				}
 				if (restoreFocus) queueMicrotask(() => {
 					triggerRef.current?.focus();
 				});
+			};
+			const scheduleHoverOpen = () => {
+				cancelHoverOpen();
+				cancelHoverClose();
+				if (open) return;
+				hoverOpenTimer.current = setTimeout(() => {
+					hoverOpenTimer.current = void 0;
+					changeOpen(true);
+				}, 150);
+			};
+			const scheduleHoverClose = () => {
+				cancelHoverOpen();
+				cancelHoverClose();
+				hoverCloseTimer.current = setTimeout(() => {
+					hoverCloseTimer.current = void 0;
+					changeOpen(false);
+				}, 120);
 			};
 			const closeBranch = (root) => {
 				const closing = /* @__PURE__ */ new Set();
@@ -410,11 +498,26 @@ window.__ModuleLoader__.load({
 			(0, react.useEffect)(() => {
 				if (!open) return;
 				const closeOutside = (event) => {
-					if (event.target instanceof Node && !rootRef.current?.contains(event.target)) changeOpen(false);
+					if (event.target instanceof Node && !rootRef.current?.contains(event.target) && !menuRef.current?.contains(event.target)) changeOpen(false);
 				};
 				document.addEventListener("pointerdown", closeOutside);
 				return () => {
 					document.removeEventListener("pointerdown", closeOutside);
+				};
+			}, [open]);
+			(0, react.useEffect)(() => {
+				if (!open) return;
+				const placeMenu = () => {
+					const trigger = triggerRef.current;
+					/* v8 ignore next -- native resize or scroll can outlive the trigger */
+					if (trigger === null) return;
+					setMenuPosition(catalogMenuPosition(trigger));
+				};
+				window.addEventListener("resize", placeMenu);
+				document.addEventListener("scroll", placeMenu, true);
+				return () => {
+					window.removeEventListener("resize", placeMenu);
+					document.removeEventListener("scroll", placeMenu, true);
 				};
 			}, [open]);
 			(0, react.useEffect)(() => {
@@ -427,23 +530,28 @@ window.__ModuleLoader__.load({
 				};
 			}, [open, descendants.runningCount]);
 			(0, react.useEffect)(() => () => {
+				cancelHoverOpen();
+				cancelHoverClose();
 				for (const parentSessionId of observedCatalogs.current) setCatalogOpenRef.current(parentSessionId, false);
 				observedCatalogs.current.clear();
 			}, []);
-			const visible = presentedCatalog !== void 0 && (presentedCatalog.state === "error" || presentedCatalog.entries.length > 0 || descendantCount > 0);
+			const visible = presentedCatalog !== void 0 && (variant === "switcher" || presentedCatalog.state === "error" || presentedCatalog.entries.length > 0 || descendantCount > 0);
 			(0, react.useEffect)(() => {
-				if (visible || !open) return;
+				if (visible) return;
+				cancelHoverOpen();
+				cancelHoverClose();
+				if (!open) return;
 				setOpen(false);
 				closeAllCatalogs();
 			}, [visible, open]);
 			if (!visible) return null;
 			const focusAt = (index) => {
-				const items = treeItems(rootRef.current);
+				const items = treeItems(menuRef.current);
 				if (items.length === 0) return;
 				items[(index + items.length) % items.length]?.focus();
 			};
 			const navigate = (event) => {
-				const items = treeItems(rootRef.current);
+				const items = treeItems(menuRef.current);
 				const index = items.indexOf(document.activeElement);
 				if (event.key === "Escape") {
 					event.preventDefault();
@@ -463,60 +571,111 @@ window.__ModuleLoader__.load({
 				}
 			};
 			return (0, react_jsx_runtime.jsxs)("div", {
-				className: SubagentCatalogAction_module_css_default.root,
+				className: `${SubagentHeaderLineage_module_css_default.root} ${variant === "switcher" ? SubagentHeaderLineage_module_css_default.switcherRoot : ""}`,
 				ref: rootRef,
 				onKeyDown: navigate,
-				children: [(0, react_jsx_runtime.jsxs)("button", {
-					ref: triggerRef,
-					type: "button",
-					className: SubagentCatalogAction_module_css_default.trigger,
-					"aria-haspopup": "tree",
-					"aria-expanded": open,
-					"aria-label": t(descendants.runningCount > 0 ? runningCountKey : totalCountKey, { count: descendants.runningCount > 0 ? descendants.runningCount : descendantCount }),
-					onClick: () => {
-						changeOpen(!open);
-					},
-					onKeyDown: (event) => {
-						if (event.key !== "ArrowDown") return;
-						event.preventDefault();
-						if (!open) changeOpen(true);
-						queueMicrotask(() => {
-							focusAt(0);
-						});
-					},
-					children: [
-						(0, react_jsx_runtime.jsx)("span", {
-							className: SubagentCatalogAction_module_css_default.activitySlot,
-							children: descendants.runningCount > 0 && (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.StateDot, { state: "ongoing" })
-						}),
-						(0, react_jsx_runtime.jsx)("span", {
-							className: SubagentCatalogAction_module_css_default.count,
-							children: t(totalCountKey, { count: descendantCount })
-						}),
-						(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronDownOutline14, { className: open ? SubagentCatalogAction_module_css_default.triggerOpen : void 0 })
-					]
-				}), open && (0, react_jsx_runtime.jsx)("div", {
-					className: SubagentCatalogAction_module_css_default.menu,
-					role: "tree",
-					"aria-label": t("tree.aria"),
-					children: (0, react_jsx_runtime.jsx)(CatalogRows, {
-						parentSessionId: sessionId,
-						catalog: presentedCatalog,
-						catalogs,
-						summaries,
-						expanded,
-						level: 1,
-						now,
-						openChild,
-						refresh,
-						toggleBranch,
-						closeCatalog: () => {
-							changeOpen(false);
+				onMouseEnter: scheduleHoverOpen,
+				onMouseLeave: scheduleHoverClose,
+				children: [
+					separator && (0, react_jsx_runtime.jsx)("span", {
+						className: SubagentHeaderLineage_module_css_default.separator,
+						children: "/"
+					}),
+					(0, react_jsx_runtime.jsxs)("button", {
+						ref: triggerRef,
+						type: "button",
+						className: variant === "switcher" ? `${SubagentHeaderLineage_module_css_default.switcherTrigger} ${ancestorSwitcher ? SubagentHeaderLineage_module_css_default.ancestorSwitcherTrigger : ""}` : SubagentHeaderLineage_module_css_default.trigger,
+						"aria-haspopup": "tree",
+						"aria-expanded": open,
+						"aria-label": variant === "switcher" ? t("switcher.aria", { title: switcherDisplayTitle }) : t(descendants.runningCount > 0 ? runningCountKey : totalCountKey, { count: descendants.runningCount > 0 ? descendants.runningCount : descendantCount }),
+						onClick: openTitle === void 0 ? void 0 : () => {
+							cancelHoverOpen();
+							if (open) changeOpen(false);
+							openTitle();
 						},
-						t
-					})
-				})]
+						onKeyDown: (event) => {
+							if (event.key !== "ArrowDown") return;
+							event.preventDefault();
+							if (!open) changeOpen(true);
+							queueMicrotask(() => {
+								focusAt(0);
+							});
+						},
+						children: [variant === "switcher" ? (0, react_jsx_runtime.jsx)("span", {
+							className: SubagentHeaderLineage_module_css_default.switcherTitle,
+							children: switcherDisplayTitle
+						}) : (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [descendants.runningCount > 0 && (0, react_jsx_runtime.jsx)("span", {
+							className: SubagentHeaderLineage_module_css_default.activitySlot,
+							children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.StateDot, { state: "ongoing" })
+						}), (0, react_jsx_runtime.jsx)("span", {
+							className: SubagentHeaderLineage_module_css_default.count,
+							children: t(totalCountKey, { count: descendantCount })
+						})] }), variant === "switcher" ? (0, react_jsx_runtime.jsx)(SubagentSwitcherIcon, {}) : (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronDownOutline14, { className: open ? SubagentHeaderLineage_module_css_default.triggerOpen : void 0 })]
+					}),
+					open && (0, react_dom.createPortal)((0, react_jsx_runtime.jsx)("div", {
+						ref: menuRef,
+						className: SubagentHeaderLineage_module_css_default.menu,
+						style: menuPosition,
+						role: "tree",
+						"aria-label": t("tree.aria"),
+						onMouseEnter: cancelHoverClose,
+						onMouseLeave: scheduleHoverClose,
+						children: (0, react_jsx_runtime.jsx)(CatalogRows, {
+							parentSessionId: rootSessionId,
+							currentSessionId,
+							catalog: presentedCatalog,
+							catalogs,
+							summaries,
+							expanded,
+							level: 1,
+							now,
+							openChild,
+							refresh,
+							toggleBranch,
+							closeCatalog: () => {
+								changeOpen(false);
+							},
+							t
+						})
+					}), document.body)
+				]
 			});
+		}
+		/**
+		* Render one breadcrumb title together with its subagent navigation.
+		* @param props - Breadcrumb title, session standard props, and catalog actions.
+		* @returns An ordinary-title descendant count, or a title-and-chevron sibling switcher.
+		*/
+		function SubagentHeaderLineage({ lineageSessionId, displayTitle, openTitle, useSessions, openChild, refresh, setCatalogOpen, t }) {
+			const parentId = useSessions((state) => {
+				const summary = state.byId[lineageSessionId];
+				return summary?.origin === "subagent" ? summary.parentId : void 0;
+			});
+			const shared = {
+				useSessions,
+				openChild,
+				refresh,
+				setCatalogOpen,
+				t
+			};
+			if (parentId === void 0) return (0, react_jsx_runtime.jsx)(CatalogDropdown, {
+				rootSessionId: lineageSessionId,
+				variant: "count",
+				separator: true,
+				...shared
+			}, lineageSessionId);
+			return (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [(0, react_jsx_runtime.jsx)(CatalogDropdown, {
+				rootSessionId: parentId,
+				currentSessionId: lineageSessionId,
+				variant: "switcher",
+				displayTitle,
+				...openTitle === void 0 ? {} : { openTitle },
+				...shared
+			}, lineageSessionId), openTitle === void 0 && (0, react_jsx_runtime.jsx)(CatalogDropdown, {
+				rootSessionId: lineageSessionId,
+				variant: "count",
+				...shared
+			}, lineageSessionId)] });
 		}
 		//#endregion
 		//#region \0dsh-css:/home/runner/work/deepseek-harness/deepseek-harness/packages/client/ui-subagent/src/client/SubagentReadOnlyComposer.module.css.mjs
@@ -580,6 +739,7 @@ window.__ModuleLoader__.load({
 			"count.total.other": "{count} 个子代理",
 			"count.running.one": "{count} 个子代理，正在运行",
 			"count.running.other": "{count} 个子代理，正在运行",
+			"switcher.aria": "切换子代理：{title}",
 			"tree.aria": "子代理会话",
 			"readonly.oneShot.title": "一次性子代理记录",
 			"readonly.title": "此子代理暂时只读",
@@ -616,6 +776,7 @@ window.__ModuleLoader__.load({
 			"count.total.other": "{count} subagents",
 			"count.running.one": "{count} subagent running",
 			"count.running.other": "{count} subagents running",
+			"switcher.aria": "Switch subagent: {title}",
 			"tree.aria": "Subagent sessions",
 			"readonly.oneShot.title": "One-shot subagent record",
 			"readonly.title": "This subagent is read-only for now",
@@ -659,13 +820,11 @@ window.__ModuleLoader__.load({
 					sessions.setSubagentCatalogOpen(parentSessionId, open);
 				}
 			});
-			ctx.slots.inject("conversation.session.header.actions", () => ctx.slots.register({
-				name: "conversation.session.header.actions",
-				id: "subagent-catalog",
-				order: 10,
+			ctx.slots.inject("conversation.session.header.lineage", () => ctx.slots.register({
+				name: "conversation.session.header.lineage",
 				locale: NS,
 				inject: catalogActions
-			}, SubagentCatalogAction));
+			}, SubagentHeaderLineage));
 			ctx.slots.inject("conversation.composer", () => ctx.slots.register({
 				name: "conversation.composer",
 				priority: -10,

@@ -10200,9 +10200,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		const ENDPOINT_SEGMENT_PATTERN = /^[A-Za-z0-9_$.-]+$/;
 		/**
 		* Create the browser-backed generic RPC caller.
+		* @param doFetch - transport override; defaults to the page's global fetch.
 		* @returns caller that owns request correlation and response-envelope validation.
 		*/
-		function createWebConnectionRpc() {
+		function createWebConnectionRpc(doFetch) {
+			const send = doFetch ?? ((input, init) => globalThis.fetch(input, init));
 			return { async call(channel, endpoint, payload, signal) {
 				assertTarget(channel, endpoint);
 				const rpcId = RpcId(randomUuid());
@@ -10212,7 +10214,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 					method: endpoint,
 					payload
 				};
-				const response = await globalThis.fetch(new URL(`${channel}/${endpoint}`, resolveBase()), {
+				const response = await send(new URL(`${channel}/${endpoint}`, resolveBase()), {
 					method: "POST",
 					headers: { "content-type": "application/json" },
 					body: JSON.stringify(message),
@@ -10260,8 +10262,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		function apply(ctx) {
 			const pageLocation = typeof location === "undefined" ? void 0 : location;
 			const fixtureClient = pageLocation !== void 0 && new URLSearchParams(pageLocation.search).has("fixture") ? new FixtureApiClient() : void 0;
-			const api = fixtureClient ?? new WebApiClient();
-			const rpc = fixtureClient?.rpc ?? createWebConnectionRpc();
+			const transport = globalThis.__DSH_TRANSPORT__;
+			const api = fixtureClient ?? transport?.createApiClient() ?? new WebApiClient();
+			const rpc = fixtureClient?.rpc ?? createWebConnectionRpc(transport?.fetch);
 			let started = false;
 			let description;
 			const descriptionListeners = /* @__PURE__ */ new Set();

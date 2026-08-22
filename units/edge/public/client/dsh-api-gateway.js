@@ -95,9 +95,15 @@ window.__ModuleLoader__.load({
 			async mountContribution(callerCtx, contribution) {
 				this.validateContribution(contribution);
 				const disposeRemote = callerCtx.typert.remotes.register(contribution);
+				const groups = /* @__PURE__ */ new Map();
+				for (const descriptor of contribution.descriptors) {
+					const group = groups.get(descriptor.namespace);
+					if (group === void 0) groups.set(descriptor.namespace, [descriptor]);
+					else group.push(descriptor);
+				}
 				const installed = [];
 				try {
-					for (const descriptor of contribution.descriptors) installed.push(await this.install(descriptor));
+					for (const [namespace, descriptors] of groups) installed.push(await this.installNamespace(namespace, descriptors));
 				} catch (error) {
 					for (const dispose of installed.reverse()) await dispose();
 					await disposeRemote();
@@ -135,64 +141,42 @@ window.__ModuleLoader__.load({
 					else service.assertMethodAvailable(method);
 				}
 			}
-			async install(descriptor) {
-				const token = {
-					active: true,
-					abort: new AbortController()
-				};
-				const installed = [];
-				try {
-					if (descriptor.invocation.kind === "direct") installed.push(await this.installDirect(descriptor, token));
-					const projection = scopedProjection(descriptor);
-					if (projection !== void 0) installed.push(await this.installScoped(descriptor, projection, token));
-				} catch (error) {
-					token.active = false;
-					token.abort.abort();
-					for (const dispose of installed.reverse()) await dispose();
-					throw error;
-				}
-				return async () => {
-					/* v8 ignore next -- Cordis effect disposers are idempotent and invoke this cleanup at most once. */
-					if (!token.active) return;
-					token.active = false;
-					token.abort.abort();
-					for (const dispose of installed.reverse()) await dispose();
-				};
-			}
-			async installDirect(descriptor, token) {
-				const namespace = await this.namespace(descriptor.namespace);
-				try {
-					namespace.service.installDirect(descriptor, token);
-				} catch (error) {
-					await this.disposeNamespace(descriptor.namespace, namespace);
-					throw error;
-				}
-				return async () => {
-					namespace.service.remove("direct", descriptor.method, token);
-					await this.disposeNamespace(descriptor.namespace, namespace);
-				};
-			}
-			async installScoped(descriptor, projection, token) {
-				const namespace = await this.namespace(descriptor.namespace);
-				try {
-					namespace.service.installScoped(descriptor, projection, token);
-				} catch (error) {
-					await this.disposeNamespace(descriptor.namespace, namespace);
-					throw error;
-				}
-				return async () => {
-					namespace.service.remove("scoped", descriptor.method, token);
-					await this.disposeNamespace(descriptor.namespace, namespace);
-				};
-			}
-			async namespace(name) {
+			/**
+			* Mount one namespace's descriptor group with no visibility gap: a fresh
+			* namespace installs its whole group synchronously inside its fiber's
+			* apply, so a plugin parked on the namespace service never observes it
+			* without the methods the same contribution carries; an existing namespace
+			* takes the group in one synchronous step.
+			* @param name - Remote namespace.
+			* @param descriptors - Every contribution descriptor naming that namespace.
+			* @returns disposer unmounting the group and the namespace once empty.
+			*/
+			async installNamespace(name, descriptors) {
 				let namespace = this.namespaces.get(name);
-				if (namespace !== void 0) return namespace;
+				let installed;
+				if (namespace === void 0) ({namespace, installed} = await this.createNamespace(name, descriptors));
+				else installed = installMethods(namespace.service, descriptors);
+				const handle = namespace;
+				return async () => {
+					for (const method of [...installed].reverse()) {
+						/* v8 ignore next -- Cordis effect disposers are idempotent and invoke this cleanup at most once. */
+						if (!method.token.active) continue;
+						method.token.active = false;
+						method.token.abort.abort();
+						if (method.scoped) handle.service.remove("scoped", method.descriptor.method, method.token);
+						if (method.direct) handle.service.remove("direct", method.descriptor.method, method.token);
+					}
+					await this.disposeNamespace(name, handle);
+				};
+			}
+			async createNamespace(name, descriptors) {
 				let service;
+				let installed;
 				const fiber = this.ownerCtx.plugin({
 					name: remoteServiceKey(name),
 					apply: (ctx) => {
 						service = new RemoteNamespaceService(ctx, name, (direct, scoped, caller, args) => this.invokeMethod(direct, scoped, caller, args));
+						installed = installMethods(service, descriptors);
 					}
 				});
 				try {
@@ -201,14 +185,17 @@ window.__ModuleLoader__.load({
 					await fiber.dispose();
 					throw error;
 				}
-				/* v8 ignore next -- a settled namespace fiber synchronously constructs its Service. */
-				if (service === void 0) throw new Error(`client api: namespace ${JSON.stringify(name)} did not start`);
-				namespace = {
+				/* v8 ignore next 3 -- a settled namespace fiber synchronously constructs its Service and installs the group. */
+				if (service === void 0 || installed === void 0) throw new Error(`client api: namespace ${JSON.stringify(name)} did not start`);
+				const namespace = {
 					service,
 					dispose: fiber.dispose
 				};
 				this.namespaces.set(name, namespace);
-				return namespace;
+				return {
+					namespace,
+					installed
+				};
 			}
 			async disposeNamespace(name, namespace) {
 				if (!namespace.service.empty || this.namespaces.get(name) !== namespace) return;
@@ -339,6 +326,48 @@ window.__ModuleLoader__.load({
 				Reflect.deleteProperty(this, method);
 			}
 		};
+		/**
+		* Install one descriptor group on a namespace service, unwinding the partial
+		* group when a descriptor is refused.
+		* @param service - Namespace service taking the methods.
+		* @param descriptors - Descriptor group of one contribution.
+		* @returns per-descriptor records for the group disposer.
+		*/
+		function installMethods(service, descriptors) {
+			const installed = [];
+			try {
+				for (const descriptor of descriptors) {
+					const method = {
+						descriptor,
+						token: {
+							active: true,
+							abort: new AbortController()
+						},
+						direct: false,
+						scoped: false
+					};
+					installed.push(method);
+					if (descriptor.invocation.kind === "direct") {
+						service.installDirect(descriptor, method.token);
+						method.direct = true;
+					}
+					const projection = scopedProjection(descriptor);
+					if (projection !== void 0) {
+						service.installScoped(descriptor, projection, method.token);
+						method.scoped = true;
+					}
+				}
+			} catch (error) {
+				for (const method of [...installed].reverse()) {
+					method.token.active = false;
+					method.token.abort.abort();
+					if (method.scoped) service.remove("scoped", method.descriptor.method, method.token);
+					if (method.direct) service.remove("direct", method.descriptor.method, method.token);
+				}
+				throw error;
+			}
+			return installed;
+		}
 		const REMOTE_NAMESPACE_FIELDS = new Set([
 			"ctx",
 			"empty",

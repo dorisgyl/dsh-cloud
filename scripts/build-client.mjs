@@ -179,46 +179,71 @@ for (const name of candidates.sort()) {
   })
 }
 
+// Upstream orders the graph before composing it, and says why: a row may
+// require another, scan order breaks ties, and a cycle is an error naming the
+// packages on it. Alphabetical order happened to work here; ordering is not
+// ours to guess, so it is theirs to compute -- before the rev, so the hash
+// describes the graph that actually ships.
+//
+// Resolved through the same workspace bases as every other upstream package: a
+// bare import would look in the repository root, which installs esbuild and
+// wrangler and no upstream at all.
+const upstreamModules = await import(pathToFileURL(resolveEntry('@deepseek-ai/dsh-client-modules')).href)
+const { bootInjections, orderByModuleGraph } = upstreamModules
+if (typeof bootInjections !== 'function') {
+  throw new Error('@deepseek-ai/dsh-client-modules no longer exports bootInjections; the boot protocol moved again')
+}
+const ordered = typeof orderByModuleGraph === 'function' ? orderByModuleGraph(entries) : entries
+
 // One rev for the whole graph, derived from its contents rather than the clock:
 // two builds of the same roster produce the same manifest, so a redeploy that
 // changed nothing does not invalidate every client's cache.
-const rev = hash(entries.map((e) => `${e.id}@${e.rev}`).join('|'))
-const manifest = { rev, entries }
+const rev = hash(ordered.map((e) => `${e.id}@${e.rev}`).join('|'))
+const manifest = { rev, entries: ordered }
 
 mkdirSync('./units/edge/build', { recursive: true })
 writeFileSync('./units/edge/build/boot-manifest.json', JSON.stringify(manifest, null, 2))
 
-// The head fragment U1 injects, produced by UPSTREAM's own function.
+// The head fragment U1 injects, produced from UPSTREAM's own injection table.
 //
 // The boot protocol is not just the manifest. Since 0.1.0-rc.8 it is three
 // things in one order: an inline queue-mode `window.__ModuleLoader__`, blocking
 // classic scripts for the two bundles the parser must execute before the shell
 // (dsh-client-modules, dsh-client-runtime), and only then the graph. The shell
-// throws on the first one missing.
+// throws on the first one missing, and waits forever on the last.
 //
-// This repository had a hand-written copy of that protocol -- one line
+// This repository once had a hand-written copy of that protocol -- one line
 // injecting `__DSH_BOOT__` -- which was the whole protocol at rc.6 and a third
-// of it at rc.8. Following the version broke the page, and it broke in the
-// browser, where none of the boot checks here or in the agent Worker look.
+// of it at rc.8. Following the version broke the page, in the browser, where
+// nothing here was looking. So it is generated, not written.
 //
-// So the fragment is generated rather than written: `injectBootManifest` is
-// exported from dsh-client-modules for exactly this, it runs at build time
-// where its node: imports are ordinary, and the next protocol change arrives as
-// a diff in this file rather than as a blank page.
-// Resolved through the same workspace bases as every other upstream package: a
-// bare import here would look in the repository root, which installs esbuild
-// and wrangler and no upstream at all.
-const { injectBootManifest } = await import(pathToFileURL(resolveEntry('@deepseek-ai/dsh-client-modules')).href)
-const SENTINEL = '<!doctype html><html><head></head><body></body></html>'
-const injected = injectBootManifest(SENTINEL, manifest)
-const opened = injected.indexOf('<head>') + '<head>'.length
-const closed = injected.indexOf('</head>')
-const bootHead = injected.slice(opened, closed)
+// 0.1.1 changed the shape of the generator without changing the protocol:
+// `injectBootManifest(html, graph)` returned finished HTML and is gone;
+// `bootInjections(graph)` returns the rows and leaves rendering to the host.
+// That suits a Worker better -- U1 injects through HTMLRewriter rather than by
+// string surgery -- and it deleted the sentinel-and-slice this used to need.
 
-// Assert the shape rather than trust the slice. If upstream stops injecting
-// into <head>, or drops a piece, this is a build failure -- which is the whole
-// point of generating it. A silently empty fragment would deploy a blank page
-// exactly like the one this replaced.
+/** One injection row as head HTML. An unknown row kind is a protocol change. */
+function renderInjection(row) {
+  const attr = (value) => String(value)
+    .replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+  // `<` escaped inside JSON so a plugin-controlled string cannot close the
+  // script element it is sitting in.
+  const json = (value) => JSON.stringify(value).replaceAll('<', '\\u003c')
+  switch (row.kind) {
+    case 'script': return `<script>${row.text}</script>`
+    case 'script-src': return `<script src="${attr(row.src)}"></script>`
+    case 'global': return `<script>window.${row.name} = ${json(row.value)}</script>`
+    default: throw new Error(`upstream boot injection row kind "${row.kind}" is not one this host renders`)
+  }
+}
+
+const rows = bootInjections(manifest)
+const bootHead = rows.filter((row) => (row.placement ?? 'head') === 'head').map(renderInjection).join('')
+
+// Assert the result rather than trust it. A silently empty or partial fragment
+// deploys the same blank page this generation replaced, and both halves of that
+// outage were invisible until a browser loaded them.
 const required = [
   ['the module-loader facade', '__ModuleLoader__'],
   ['the boot graph', '__DSH_BOOT__'],
@@ -227,9 +252,9 @@ const required = [
 const missing = required.filter(([, needle]) => !bootHead.includes(needle)).map(([what]) => what)
 if (missing.length) {
   throw new Error([
-    'the injected boot head is missing ' + missing.join(', ') + '.',
-    'upstream injectBootManifest produced:',
-    bootHead.slice(0, 400),
+    `the injected boot head is missing ${missing.join(', ')}.`,
+    `upstream returned ${rows.length} row(s): ${rows.map((r) => r.kind).join(', ')}`,
+    bootHead.slice(0, 300),
   ].join('\n  '))
 }
 writeFileSync('./units/edge/build/boot-head.json', JSON.stringify({ html: bootHead }, null, 2))

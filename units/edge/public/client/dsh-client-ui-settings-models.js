@@ -2772,7 +2772,7 @@ window.__ModuleLoader__.load({
 					ctx.remote.$on("settings/document-updated", () => {
 						refreshModels();
 					}),
-					ctx.remote.$on("credentials/updated", refreshModels),
+					ctx.remote.$on("credentials/reference-updated", refreshModels),
 					ctx.remote.$on("llm/adapters-updated", refreshModels),
 					ctx.on("connection/reset", refreshModels)
 				];

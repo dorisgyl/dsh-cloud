@@ -230,7 +230,7 @@ window.__ModuleLoader__.load({
 		}
 		//#endregion
 		//#region \0dsh-css:/home/runner/work/deepseek-harness/deepseek-harness/packages/client/ui-user-questions/src/client/QuestionComposer.module.css.mjs
-		const css = ".Mbwy4a_frame{padding:6px calc(var(--dsh-composer-side-clearance) + 16px) 10px;justify-content:center;display:flex}.Mbwy4a_card{width:100%;max-width:var(--dsh-chat-content-width);border:1px solid var(--dsw-alias-border-l2-darkmode-thin);background:var(--dsw-specific-input-major);max-height:min(60vh,520px);box-shadow:var(--dsw-shadow-lv2);color:var(--dsw-alias-label-primary);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2);border-radius:20px;flex-direction:column;padding:0 0 10px;display:flex;overflow:hidden}.Mbwy4a_card,.Mbwy4a_card *{box-sizing:border-box}.Mbwy4a_cardMinimized{max-height:none}.Mbwy4a_cardMinimized .Mbwy4a_header{padding-bottom:14px}.Mbwy4a_headerActions{flex-shrink:0;align-items:center;gap:4px;display:flex}.Mbwy4a_header{flex-shrink:0;justify-content:space-between;align-items:flex-start;gap:16px;padding:20px 16px 0 24px;display:flex}.Mbwy4a_headingBlock{min-width:0}.Mbwy4a_eyebrow{color:var(--dsw-alias-label-tertiary);margin-bottom:5px;font-size:11px;line-height:16px}.Mbwy4a_title{margin:0;font-size:16px;font-weight:500;line-height:22px}.Mbwy4a_detail{margin:0 2px 8px}.Mbwy4a_footerActions{flex-shrink:0;align-items:center;gap:12px;display:flex}.Mbwy4a_pager{flex-shrink:0;align-items:center;gap:6px;display:flex}.Mbwy4a_progress{color:var(--dsw-alias-label-secondary);white-space:nowrap;word-spacing:-2px;padding:0 4px;font-size:14px;font-weight:500;line-height:24px}.Mbwy4a_iconButton{width:24px;height:24px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:999px;place-items:center;padding:0;display:grid}.Mbwy4a_iconButton:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.Mbwy4a_iconButton:disabled{color:var(--dsw-alias-label-dimmed);cursor:default}.Mbwy4a_body{overscroll-behavior:contain;flex-direction:column;flex:auto;min-height:0;display:flex;overflow-y:auto}.Mbwy4a_options{flex-direction:column;gap:1px;margin:8px 0 0;padding:4px 12px;display:flex}.Mbwy4a_option{width:100%;min-height:40px;color:inherit;text-align:left;cursor:pointer;background:0 0;border:1px solid #0000;border-radius:12px;flex-shrink:0;align-items:flex-start;gap:8px;padding:8px 12px 8px 8px;transition:background-color .12s,border-color .12s;display:flex}.Mbwy4a_option:hover:not(:disabled),.Mbwy4a_optionSelected{background:var(--dsw-alias-interactive-bg-hover)}.Mbwy4a_optionSelected{border-color:var(--dsw-alias-border-l2)}.Mbwy4a_option:disabled{cursor:default}.Mbwy4a_number{background:var(--dsw-alias-bg-overlay);width:20px;height:20px;color:var(--dsw-alias-label-secondary);border-radius:6px;flex:0 0 20px;place-items:center;margin-top:2px;font-size:12px;font-weight:500;line-height:18px;display:grid}.Mbwy4a_checkbox{flex:0 0 20px;place-items:center;width:20px;height:20px;margin-top:2px;display:grid}.Mbwy4a_checkbox:before{content:\"\";border:1px solid var(--dsw-alias-border-l4);border-radius:4px;grid-area:1/1;width:14px;height:14px;transition:background-color .12s,border-color .12s}.Mbwy4a_checkbox>svg{grid-area:1/1}.Mbwy4a_checkboxChecked{color:var(--dsw-alias-label-primary-foreground)}.Mbwy4a_checkboxChecked:before{border-color:var(--dsw-alias-label-primary);background:var(--dsw-alias-label-primary)}.Mbwy4a_optionCopy{flex:1;min-width:0}.Mbwy4a_optionLine{flex-wrap:wrap;align-items:baseline;gap:2px 6px;display:flex}.Mbwy4a_optionLabel{font-size:14px;font-weight:500;line-height:24px}.Mbwy4a_badge{background:var(--dsw-specific-sidebar-nav-item-active-accent);color:var(--dsw-alias-button-info-fill);border-radius:6px;padding:0 4px;font-size:11px;font-weight:600;line-height:18px}.Mbwy4a_description{color:var(--dsw-alias-label-tertiary);font-size:14px;font-weight:400;line-height:24px}.Mbwy4a_customRow{border:1px solid #0000;border-radius:12px;flex-shrink:0;align-items:flex-start;gap:8px;width:100%;min-height:40px;padding:8px 12px 8px 8px;transition:background-color .12s,border-color .12s;display:flex}.Mbwy4a_customRow:hover,.Mbwy4a_customRow:focus-within,.Mbwy4a_customRowActive{background:var(--dsw-alias-interactive-bg-hover)}.Mbwy4a_customRow:focus-within,.Mbwy4a_customRowActive{border-color:var(--dsw-alias-border-l2)}.Mbwy4a_customInput{min-width:0;color:var(--dsw-alias-label-primary);caret-color:var(--dsw-alias-state-business-primary);font:inherit;background:0 0;border:none;outline:none;flex:1;padding:0;font-size:14px;line-height:24px}.Mbwy4a_customInput::placeholder{color:var(--dsw-alias-label-caption)}.Mbwy4a_customTextarea{resize:none;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-module-platform);min-height:64px;max-height:140px;color:var(--dsw-alias-label-primary);caret-color:var(--dsw-alias-state-business-primary);font:inherit;border-radius:10px;outline:none;flex-shrink:0;margin:0 12px;padding:8px 12px;font-size:14px;line-height:24px;display:block}.Mbwy4a_customTextarea:focus{border-color:var(--dsw-alias-state-business-primary)}.Mbwy4a_customTextarea::placeholder{color:var(--dsw-alias-label-caption)}.Mbwy4a_footer{flex-shrink:0;justify-content:space-between;align-items:center;gap:12px;margin-top:12px;padding:0 10px 0 18px;display:flex}.Mbwy4a_feedback{min-height:16px;color:var(--dsw-alias-state-error-primary);text-align:right;flex:1;font-size:11px;line-height:16px}@media (width<=720px){.Mbwy4a_card{border-radius:16px}.Mbwy4a_header{padding:10px 12px 0 18px}.Mbwy4a_options{padding:4px 8px}.Mbwy4a_title{font-size:15px;line-height:21px}.Mbwy4a_option,.Mbwy4a_customRow{padding:8px 6px}.Mbwy4a_footer{align-items:flex-end;padding:0 10px}.Mbwy4a_footerActions{flex-shrink:0}}@media (prefers-reduced-motion:reduce){.Mbwy4a_option,.Mbwy4a_customRow{transition:none}}";
+		const css = ".Mbwy4a_frame{padding:6px calc(var(--dsh-composer-side-clearance) + 16px) 10px;justify-content:center;display:flex}.Mbwy4a_card{width:100%;max-width:var(--dsh-chat-content-width);border:1px solid var(--dsw-alias-border-l2-darkmode-thin);background:var(--dsw-specific-input-major);max-height:min(60vh,520px);box-shadow:var(--dsw-shadow-lv2);color:var(--dsw-alias-label-primary);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2);border-radius:20px;flex-direction:column;padding:0 0 10px;display:flex;overflow:hidden}.Mbwy4a_card,.Mbwy4a_card *{box-sizing:border-box}.Mbwy4a_cardMinimized{max-height:none}.Mbwy4a_cardMinimized .Mbwy4a_header{padding-bottom:14px}.Mbwy4a_headerActions{flex-shrink:0;align-items:center;gap:4px;display:flex}.Mbwy4a_header{flex-shrink:0;justify-content:space-between;align-items:flex-start;gap:16px;padding:20px 16px 0 24px;display:flex}.Mbwy4a_headingBlock{min-width:0}.Mbwy4a_eyebrow{color:var(--dsw-alias-label-tertiary);margin-bottom:5px;font-size:11px;line-height:16px}.Mbwy4a_title{margin:0;font-size:16px;font-weight:500;line-height:22px}.Mbwy4a_detail{margin:0 2px 8px}.Mbwy4a_footerActions{flex-shrink:0;align-items:center;gap:12px;display:flex}.Mbwy4a_pager{flex-shrink:0;align-items:center;gap:6px;display:flex}.Mbwy4a_progress{color:var(--dsw-alias-label-secondary);white-space:nowrap;word-spacing:-2px;padding:0 4px;font-size:14px;font-weight:500;line-height:24px}.Mbwy4a_iconButton{width:24px;height:24px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:999px;place-items:center;padding:0;display:grid}.Mbwy4a_iconButton:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.Mbwy4a_iconButton:disabled{color:var(--dsw-alias-label-dimmed);cursor:default}.Mbwy4a_body{overscroll-behavior:contain;flex-direction:column;flex:auto;min-height:0;display:flex;overflow-y:auto}.Mbwy4a_options{flex-direction:column;gap:1px;margin:8px 0 0;padding:4px 12px;display:flex}.Mbwy4a_option{width:100%;min-height:40px;color:inherit;text-align:left;cursor:pointer;background:0 0;border:1px solid #0000;border-radius:12px;flex-shrink:0;align-items:flex-start;gap:8px;padding:8px 12px 8px 8px;transition:background-color .12s,border-color .12s;display:flex}.Mbwy4a_option:hover:not(:disabled),.Mbwy4a_optionSelected{background:var(--dsw-alias-interactive-bg-hover)}.Mbwy4a_optionSelected{border-color:var(--dsw-alias-border-l2)}.Mbwy4a_option:disabled{cursor:default}.Mbwy4a_number{background:var(--dsw-alias-bg-overlay);width:20px;height:20px;color:var(--dsw-alias-label-secondary);border-radius:6px;flex:0 0 20px;place-items:center;margin-top:2px;font-size:12px;font-weight:500;line-height:18px;display:grid}.Mbwy4a_checkbox{flex:0 0 20px;place-items:center;width:20px;height:20px;margin-top:2px;display:grid}.Mbwy4a_checkbox:before{content:\"\";border:1px solid var(--dsw-alias-border-l4);border-radius:4px;grid-area:1/1;width:14px;height:14px;transition:background-color .12s,border-color .12s}.Mbwy4a_checkbox>svg{grid-area:1/1}.Mbwy4a_checkboxChecked{color:var(--dsw-alias-label-primary-foreground)}.Mbwy4a_checkboxChecked:before{border-color:var(--dsw-alias-label-primary);background:var(--dsw-alias-label-primary)}.Mbwy4a_optionCopy{flex:1;min-width:0}.Mbwy4a_optionLine{flex-wrap:wrap;align-items:baseline;gap:2px 6px;display:flex}.Mbwy4a_optionLabel{font-size:14px;font-weight:500;line-height:24px}.Mbwy4a_badge{background:var(--dsw-specific-sidebar-nav-item-active-accent);color:var(--dsw-alias-button-info-fill);border-radius:6px;padding:0 4px;font-size:11px;font-weight:600;line-height:18px}.Mbwy4a_description{color:var(--dsw-alias-label-tertiary);font-size:14px;font-weight:400;line-height:24px}.Mbwy4a_customRow{border:1px solid #0000;border-radius:12px;flex-shrink:0;align-items:flex-start;gap:8px;width:100%;min-height:40px;padding:8px 12px 8px 8px;transition:background-color .12s,border-color .12s;display:flex}.Mbwy4a_customRow:hover,.Mbwy4a_customRow:focus-within,.Mbwy4a_customRowActive{background:var(--dsw-alias-interactive-bg-hover)}.Mbwy4a_customRow:focus-within,.Mbwy4a_customRowActive{border-color:var(--dsw-alias-border-l2)}.Mbwy4a_field{--dsh-answer-field-padding:0;min-width:0;display:grid}.Mbwy4a_field>*{min-width:0;padding:var(--dsh-answer-field-padding);font:inherit;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;grid-area:1/1;font-size:14px;line-height:24px}.Mbwy4a_fieldMirror{box-sizing:content-box;visibility:hidden;max-height:144px;overflow:hidden}.Mbwy4a_fieldInput{resize:none;color:var(--dsw-alias-label-primary);caret-color:var(--dsw-alias-state-business-primary);background:0 0;border:none;outline:none;overflow-y:auto}.Mbwy4a_fieldInput::placeholder{color:var(--dsw-alias-label-caption)}.Mbwy4a_customInline{flex:1}.Mbwy4a_customBlock{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-module-platform);--dsh-answer-field-padding:8px 12px;border-radius:10px;flex-shrink:0;min-height:64px;margin:0 12px}.Mbwy4a_customBlock:focus-within{border-color:var(--dsw-alias-state-business-primary)}.Mbwy4a_footer{flex-shrink:0;justify-content:space-between;align-items:center;gap:12px;margin-top:12px;padding:0 10px 0 18px;display:flex}.Mbwy4a_feedback{min-height:16px;color:var(--dsw-alias-state-error-primary);text-align:right;flex:1;font-size:11px;line-height:16px}@media (width<=720px){.Mbwy4a_card{border-radius:16px}.Mbwy4a_header{padding:10px 12px 0 18px}.Mbwy4a_options{padding:4px 8px}.Mbwy4a_title{font-size:15px;line-height:21px}.Mbwy4a_option,.Mbwy4a_customRow{padding:8px 6px}.Mbwy4a_footer{align-items:flex-end;padding:0 10px}.Mbwy4a_footerActions{flex-shrink:0}}@media (prefers-reduced-motion:reduce){.Mbwy4a_option,.Mbwy4a_customRow{transition:none}}";
 		const tagId = "@deepseek-ai/dsh-client-ui-user-questions/QuestionComposer.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
 			const tag = document.createElement("style");
@@ -246,14 +246,17 @@ window.__ModuleLoader__.load({
 			"cardMinimized": "Mbwy4a_cardMinimized",
 			"checkbox": "Mbwy4a_checkbox",
 			"checkboxChecked": "Mbwy4a_checkboxChecked",
-			"customInput": "Mbwy4a_customInput",
+			"customBlock": "Mbwy4a_customBlock",
+			"customInline": "Mbwy4a_customInline",
 			"customRow": "Mbwy4a_customRow",
 			"customRowActive": "Mbwy4a_customRowActive",
-			"customTextarea": "Mbwy4a_customTextarea",
 			"description": "Mbwy4a_description",
 			"detail": "Mbwy4a_detail",
 			"eyebrow": "Mbwy4a_eyebrow",
 			"feedback": "Mbwy4a_feedback",
+			"field": "Mbwy4a_field",
+			"fieldInput": "Mbwy4a_fieldInput",
+			"fieldMirror": "Mbwy4a_fieldMirror",
 			"footer": "Mbwy4a_footer",
 			"footerActions": "Mbwy4a_footerActions",
 			"frame": "Mbwy4a_frame",
@@ -292,6 +295,42 @@ window.__ModuleLoader__.load({
 		/** Return whether a text-field key event belongs to an active IME composition. */
 		function isComposing(event) {
 			return event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229;
+		}
+		/**
+		* Auto-growing free-text answer: a textarea, so a long answer soft-wraps and
+		* Shift+Enter breaks a line, over a hidden mirror that owns the height.
+		*
+		* The mirror renders the draft plus a trailing newline in normal flow and so
+		* sizes the grid row (counting rows by '\n' cannot see soft wraps); the
+		* textarea shares that one cell and stretches to it, and `rows={1}` keeps the
+		* control's own intrinsic height out of the row sizing so the mirror alone
+		* decides. Past the mirror's cap the textarea scrolls itself — it is the only
+		* scrollport in the stack, there being no second glyph layer to keep aligned.
+		* Mirror and textarea MUST share font, line-height, padding and wrapping rules
+		* or the two heights diverge.
+		*
+		* @param props - field shape, draft text, and the field's event handlers.
+		* @returns The mirrored auto-growing field.
+		*/
+		function AnswerField(props) {
+			return (0, react_jsx_runtime.jsxs)("div", {
+				className: clsx(QuestionComposer_module_css_default.field, props.variant === "inline" ? QuestionComposer_module_css_default.customInline : QuestionComposer_module_css_default.customBlock),
+				children: [(0, react_jsx_runtime.jsx)("div", {
+					"aria-hidden": true,
+					className: QuestionComposer_module_css_default.fieldMirror,
+					children: `${props.value}\n`
+				}), (0, react_jsx_runtime.jsx)("textarea", {
+					autoFocus: props.autoFocus,
+					className: QuestionComposer_module_css_default.fieldInput,
+					value: props.value,
+					disabled: props.disabled,
+					rows: 1,
+					placeholder: props.placeholder,
+					onFocus: props.onFocus,
+					onChange: props.onChange,
+					onKeyDown: props.onKeyDown
+				})]
+			});
 		}
 		/**
 		* Composer takeover boundary; the carrier key keys local drafts, so a
@@ -538,21 +577,19 @@ window.__ModuleLoader__.load({
 									className: QuestionComposer_module_css_default.number,
 									"aria-hidden": "true",
 									children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconEditOutline16, { size: 12 })
-								}), (0, react_jsx_runtime.jsx)("input", {
-									type: "text",
-									className: QuestionComposer_module_css_default.customInput,
+								}), (0, react_jsx_runtime.jsx)(AnswerField, {
+									variant: "inline",
 									value: draft.custom,
 									disabled: busy !== null,
 									placeholder: t("custom.placeholder"),
 									onChange: draftCustom,
 									onKeyDown: continueFromCustom
 								})]
-							}) : (0, react_jsx_runtime.jsx)("textarea", {
+							}) : (0, react_jsx_runtime.jsx)(AnswerField, {
 								autoFocus: !focusedQuestions.current.has(index),
-								className: QuestionComposer_module_css_default.customTextarea,
+								variant: "block",
 								value: draft.custom,
 								disabled: busy !== null,
-								rows: 2,
 								placeholder: t("custom.placeholder"),
 								onFocus: () => {
 									focusedQuestions.current.add(index);

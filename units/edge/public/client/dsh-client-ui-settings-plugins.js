@@ -1235,7 +1235,7 @@ window.__ModuleLoader__.load({
 			const bash = new BashCardController(ctx.settingsScope.bind({ namespace: SHELL_NS }));
 			const agentLoop = new AgentLoopCardController(ctx.settingsScope.bind({ namespace: AGENT_LOOP_NS }));
 			const webSearch = new WebSearchCardController(ctx.settingsScope.bind({ namespace: WEB_SEARCH_NS }), api);
-			ctx.effect(() => ctx.remote.$on("credentials/updated", (ref) => {
+			ctx.effect(() => ctx.remote.$on("credentials/reference-updated", (ref) => {
 				webSearch.refreshCredential(ref);
 			}), "ui-settings-plugins: credential invalidations");
 			const configurable = new ConfigurablePluginsTabController(ctx.settingsScope.describe(), () => ctx.slots.entries("settings.plugin.item"));

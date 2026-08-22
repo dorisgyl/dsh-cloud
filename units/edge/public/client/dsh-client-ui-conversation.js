@@ -2893,14 +2893,52 @@ window.__ModuleLoader__.load({
 			const whole = Math.round(s);
 			return `${Math.floor(whole / 60)}m${whole % 60}s`;
 		}
+		/** Round a cache-read ratio to an integer percentage, with positive ties rounded up. */
+		function roundedIntegerPercent(cacheReadTokens, denominator) {
+			const denominatorQuotient = Math.floor(denominator / 200);
+			const denominatorRemainder = denominator % 200;
+			let lower = 0;
+			let upper = 100;
+			while (lower < upper) {
+				const candidate = Math.floor((lower + upper + 1) / 2);
+				const factor = candidate * 2 - 1;
+				if (cacheReadTokens >= factor * denominatorQuotient + Math.ceil(factor * denominatorRemainder / 200)) lower = candidate;
+				else upper = candidate - 1;
+			}
+			return lower;
+		}
 		/**
-		* Cache-hit share of prompt-side input over the whole durable log.
+		* Display-ready cache-hit share of prompt-side input over the whole durable log.
 		* @param usage - the session's token-usage projection value.
-		* @returns rounded integer percent, or null when no input was billed.
+		* @returns integer text when integer rounding stays below 100, otherwise the
+		* minimum decimal precision that still rounds below 100; a full hit returns
+		* 100, and no billed input returns null.
 		*/
 		function cacheHitPercent(usage) {
 			const denominator = billedInputTokens(usage);
-			return denominator === 0 ? null : Math.round(usage.cacheReadTokens / denominator * 100);
+			if (denominator === 0) return null;
+			const missedInputTokens = usage.uncachedInputTokens + usage.cacheWriteTokens;
+			if (missedInputTokens === 0) return "100";
+			const integerPercent = roundedIntegerPercent(usage.cacheReadTokens, denominator);
+			if (integerPercent < 100) return String(integerPercent);
+			let decimalPlaces = 1;
+			let scaledDoubleGap = missedInputTokens * 200;
+			const denominatorTens = Math.floor(denominator / 10);
+			while (scaledDoubleGap <= denominatorTens) {
+				scaledDoubleGap *= 10;
+				decimalPlaces += 1;
+			}
+			const denominatorOnes = denominator % 10;
+			let roundedLoss = 5;
+			for (let loss = 1; loss < 5; loss += 1) {
+				const factor = loss * 2 + 1;
+				const threshold = factor * denominatorTens + Math.floor(factor * denominatorOnes / 10);
+				if (scaledDoubleGap <= threshold) {
+					roundedLoss = loss;
+					break;
+				}
+			}
+			return `99.${"9".repeat(decimalPlaces - 1)}${10 - roundedLoss}`;
 		}
 		/**
 		* Sum the three disjoint prompt-side billing buckets.
@@ -3484,6 +3522,41 @@ window.__ModuleLoader__.load({
 			textRefs: [],
 			hint: null
 		};
+		/**
+		* Resolve one edit's range from the record taken before it applied.
+		* A selection the edit replaces is the range outright. A caret delete replaces
+		* nothing and reports the bare caret, so the removed span is whatever the draft
+		* lost, on the side `inputType` names — measured, because one caret gesture can
+		* remove a multi-unit grapheme, a word, or a line.
+		* @param pending - record taken at `beforeinput`, null when none was seen.
+		* @param prevLength - length of the draft the edit applied to.
+		* @param nextLength - length of the resulting draft.
+		* @returns the exact range, or undefined when the record cannot describe this
+		* edit and the machine's diff scan has to recover it.
+		*/
+		function editRangeOf(pending, prevLength, nextLength) {
+			if (pending === null || pending.draftLength !== prevLength) return void 0;
+			const { start, end, inputType } = pending;
+			if (start > end || end > prevLength) return void 0;
+			const insertedLength = nextLength - prevLength + (end - start);
+			if (insertedLength >= 0) return {
+				start,
+				end,
+				insertedLength
+			};
+			if (start !== end) return void 0;
+			const removed = prevLength - nextLength;
+			if (inputType.endsWith("Backward")) return removed <= start ? {
+				start: start - removed,
+				end: start,
+				insertedLength: 0
+			} : void 0;
+			if (inputType.endsWith("Forward")) return start + removed <= prevLength ? {
+				start,
+				end: start + removed,
+				insertedLength: 0
+			} : void 0;
+		}
 		function InputBar({ useSession, useInput, inputActions, keyboard, addImages, removeImage, draftImages, resolveSubmitMode, toggleCommandMenu, stop, command, t, renderSlot, useNotices, useLexicon, useMenuLauncher, useProjection, sessionId, variant, disabled: inert = false, blocked, workspacePickerOpen = false, onRequestWorkspace, placeholder, accessory, overlay, leftItems, rightItems, footer }) {
 			const input = useInput((s) => s);
 			const notice = useNotices((s) => s);
@@ -3621,6 +3694,28 @@ window.__ModuleLoader__.load({
 				start: el.selectionStart ?? 0,
 				end: el.selectionEnd ?? el.selectionStart ?? 0
 			});
+			const pendingEditRef = (0, react.useRef)(null);
+			(0, react.useEffect)(() => {
+				const el = inputRef.current;
+				if (el === null) return;
+				const onBeforeInput = (e) => {
+					if (!e.inputType.startsWith("insert") && !e.inputType.startsWith("delete")) {
+						pendingEditRef.current = null;
+						return;
+					}
+					const { start, end } = selectionOf(el);
+					pendingEditRef.current = {
+						start,
+						end,
+						draftLength: el.value.length,
+						inputType: e.inputType
+					};
+				};
+				el.addEventListener("beforeinput", onBeforeInput);
+				return () => {
+					el.removeEventListener("beforeinput", onBeforeInput);
+				};
+			}, []);
 			const onKeyDown = (e) => {
 				if (workspaceTrigger) {
 					if (e.key === "Enter" || e.key === " ") {
@@ -3692,8 +3787,10 @@ window.__ModuleLoader__.load({
 				if (keyboard === void 0 || locked) return;
 				if (machineBusy) return;
 				const next = e.target.value;
+				const pending = pendingEditRef.current;
+				pendingEditRef.current = null;
 				safariNativeShrinkRef.current = safari && next.length < draft.length;
-				keyboard.setDraft(next);
+				keyboard.setDraft(next, editRangeOf(pending, draft.length, next.length));
 				keyboard.track(next, e.target.selectionStart ?? next.length);
 			};
 			const onCopyOrCut = (e, cut) => {
@@ -3810,10 +3907,11 @@ window.__ModuleLoader__.load({
 					at: chip.offset,
 					kind: "chip",
 					chip
-				})), ...deco.textRefs.map((ref) => ({
+				})), ...deco.textRefs.map((ref, ordinal) => ({
 					at: ref.start,
 					kind: "text-ref",
-					ref
+					ref,
+					ordinal
 				}))].sort((a, b) => a.at - b.at);
 				for (const b of boundaries) {
 					if (b.at < cursor) continue;
@@ -3856,7 +3954,7 @@ window.__ModuleLoader__.load({
 									className: InputBar_module_css_default.textRefIcon
 								})]
 							}), text.slice(1)] }) : text
-						}, `ref-${b.ref.start}`));
+						}, `ref-${b.ordinal}`));
 						cursor = b.ref.end;
 					}
 				}
@@ -5351,7 +5449,7 @@ window.__ModuleLoader__.load({
 		});
 		//#endregion
 		//#region \0dsh-css:/home/runner/work/deepseek-harness/deepseek-harness/packages/client/ui-conversation/src/client/chat/ChatView.module.css.mjs
-		const css$11 = ".Md3f7G_root{flex-direction:column;flex:auto;min-height:0;display:flex;position:relative}.Md3f7G_scroll{min-height:0;padding:16px calc(var(--dsh-composer-side-clearance) + 16px);flex:auto;overflow-y:auto}[data-conversation-scroll] .Md3f7G_root{flex:none;height:auto;min-height:auto}[data-conversation-scroll] .Md3f7G_scroll{flex:none;min-height:auto;overflow:visible}.Md3f7G_column{max-width:var(--dsh-chat-content-width);flex-direction:column;gap:16px;width:100%;margin:0 auto;display:flex}.Md3f7G_flowItem{min-width:0}.Md3f7G_flowItem:empty{display:none}.Md3f7G_callRow{border-radius:6px}.Md3f7G_turnStatus{height:26px;font:var(--dsw-font-s-strong-14);white-space:nowrap;background:linear-gradient(90deg, var(--dsw-static-deepseek-500) 0%, var(--dsw-static-deepseek-500) 40%, var(--dsw-static-deepseek-200) 50%, var(--dsw-static-deepseek-500) 60%, var(--dsw-static-deepseek-500) 100%);color:#0000;-webkit-text-fill-color:transparent;background-position:100% 0;background-size:250% 100%;-webkit-background-clip:text;background-clip:text;flex:none;align-self:flex-start;align-items:center;animation:1.8s linear infinite Md3f7G_dsh-turn-status-shimmer;display:inline-flex}.Md3f7G_turnStatusClock{font:var(--dsw-font-xs-13);font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-caption);-webkit-text-fill-color:var(--dsw-alias-label-caption);margin-left:8px;font-weight:400}@keyframes Md3f7G_dsh-turn-status-shimmer{to{background-position:0 0}}@media (prefers-reduced-motion:reduce){.Md3f7G_turnStatus{background-position:0 0;background-size:100% 100%;animation:none}}.Md3f7G_hint{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}.Md3f7G_openError{color:var(--dsw-alias-state-error-primary);font-size:12px;line-height:18px}.Md3f7G_older{justify-content:center;display:flex}.Md3f7G_older button{color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover-solid);cursor:pointer;border:none;border-radius:14px;padding:4px 12px;font-size:12px}.Md3f7G_older button:disabled{cursor:default;opacity:.6}.Md3f7G_toBottomSlot{z-index:8;height:0;padding-right:max(0px, calc((100% - var(--dsh-chat-content-width)) / 2));pointer-events:none;justify-content:flex-end;display:flex;position:sticky;bottom:16px}[data-conversation-scroll] .Md3f7G_toBottomSlot{bottom:calc(var(--dsh-composer-height,152px) + 16px)}.Md3f7G_toBottom{border:1px solid var(--dsw-alias-border-l2);width:34px;height:34px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-button-floating-fill);box-shadow:var(--dsw-shadow-lv2);cursor:pointer;pointer-events:auto;border-radius:100px;justify-content:center;align-items:center;margin-top:-34px;padding:0;display:flex}.Md3f7G_toBottom:hover{background:var(--dsw-alias-button-floating-hover)}.Md3f7G_modalAction{min-width:72px}";
+		const css$11 = ".Md3f7G_root{flex-direction:column;flex:auto;min-height:0;display:flex;position:relative}.Md3f7G_scroll{min-height:0;padding:16px calc(var(--dsh-composer-side-clearance) + 16px);flex:auto;overflow-y:auto;container-type:inline-size}[data-conversation-scroll] .Md3f7G_root{flex:none;height:auto;min-height:auto}[data-conversation-scroll] .Md3f7G_scroll{flex:none;min-height:auto;overflow:visible}.Md3f7G_column{max-width:var(--dsh-chat-content-width);flex-direction:column;gap:16px;width:100%;margin:0 auto;display:flex}.Md3f7G_flowItem{min-width:0}.Md3f7G_flowItem:empty{display:none}.Md3f7G_callRow{border-radius:6px}.Md3f7G_turnStatus{height:26px;font:var(--dsw-font-s-strong-14);white-space:nowrap;background:linear-gradient(90deg, var(--dsw-static-deepseek-500) 0%, var(--dsw-static-deepseek-500) 40%, var(--dsw-static-deepseek-200) 50%, var(--dsw-static-deepseek-500) 60%, var(--dsw-static-deepseek-500) 100%);color:#0000;-webkit-text-fill-color:transparent;background-position:100% 0;background-size:250% 100%;-webkit-background-clip:text;background-clip:text;flex:none;align-self:flex-start;align-items:center;animation:1.8s linear infinite Md3f7G_dsh-turn-status-shimmer;display:inline-flex}.Md3f7G_turnStatusClock{font:var(--dsw-font-xs-13);font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-caption);-webkit-text-fill-color:var(--dsw-alias-label-caption);margin-left:8px;font-weight:400}@keyframes Md3f7G_dsh-turn-status-shimmer{to{background-position:0 0}}@media (prefers-reduced-motion:reduce){.Md3f7G_turnStatus{background-position:0 0;background-size:100% 100%;animation:none}}.Md3f7G_hint{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}.Md3f7G_openError{color:var(--dsw-alias-state-error-primary);font-size:12px;line-height:18px}.Md3f7G_older{justify-content:center;display:flex}.Md3f7G_older button{color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover-solid);cursor:pointer;border:none;border-radius:14px;padding:4px 12px;font-size:12px}.Md3f7G_older button:disabled{cursor:default;opacity:.6}.Md3f7G_toBottomSlot{z-index:8;height:0;padding-right:max(0px, calc((100% - var(--dsh-chat-content-width)) / 2));pointer-events:none;justify-content:flex-end;display:flex;position:sticky;bottom:16px}[data-conversation-scroll] .Md3f7G_toBottomSlot{bottom:calc(var(--dsh-composer-height,152px) + 16px)}.Md3f7G_toBottom{border:1px solid var(--dsw-alias-border-l2);width:34px;height:34px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-button-floating-fill);box-shadow:var(--dsw-shadow-lv2);cursor:pointer;pointer-events:auto;border-radius:100px;justify-content:center;align-items:center;margin-top:-34px;padding:0;display:flex}.Md3f7G_toBottom:hover{background:var(--dsw-alias-button-floating-hover)}.Md3f7G_modalAction{min-width:72px}";
 		const tagId$11 = "@deepseek-ai/dsh-client-ui-conversation/ChatView.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId$11) + "]") === null) {
 			const tag = document.createElement("style");
@@ -7017,7 +7115,7 @@ window.__ModuleLoader__.load({
 		}
 		//#endregion
 		//#region \0dsh-css:/home/runner/work/deepseek-harness/deepseek-harness/packages/client/ui-conversation/src/client/skeleton/ConversationRoot.module.css.mjs
-		const css$6 = ".wSkVaW_root{background:var(--dsw-alias-bg-base);--dsh-chat-content-width:748px;--dsh-composer-card-max-width:calc(var(--dsh-chat-content-width) + 32px);--dsh-composer-side-clearance:16px;--dsh-composer-dock-inset:8px;flex-direction:column;min-width:0;height:100%;display:flex}.wSkVaW_header{border-bottom:1px solid #0000;flex:none;padding:12px 28px 0 20px;position:relative}.wSkVaW_header:after{content:\"\";z-index:0;background:var(--dsw-alias-border-l2);pointer-events:none;height:1px;position:absolute;bottom:1px;left:0;right:0}.wSkVaW_headerHidden{display:none}.wSkVaW_titleRow{align-items:center;gap:0;min-height:32px;display:flex}.wSkVaW_titleCluster{flex:1;align-items:center;gap:10px;min-width:0;display:flex}.wSkVaW_crumbs{white-space:nowrap;align-items:center;gap:4px;min-width:0;display:flex;overflow:hidden}.wSkVaW_crumbSeg{align-items:center;gap:4px;min-width:0;display:inline-flex}.wSkVaW_crumbSep{color:var(--dsw-alias-label-caption);font-size:14px;line-height:20px}.wSkVaW_crumb{max-width:220px;color:var(--dsw-alias-label-tertiary);text-overflow:ellipsis;white-space:nowrap;cursor:pointer;background:0 0;border:none;border-radius:12px;padding:4px 8px;font-size:14px;line-height:20px;overflow:hidden}.wSkVaW_crumb:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}.wSkVaW_crumbCurrent{color:var(--dsw-alias-label-primary);cursor:default;font-weight:500}.wSkVaW_headerActions{flex:none;align-items:center;gap:8px;display:flex}.wSkVaW_headerUtilities{flex:none;align-items:center;gap:8px;margin-left:20px;display:flex}.wSkVaW_headerUtilities:empty{display:none}.wSkVaW_tabs{z-index:1;gap:36px;margin-top:4px;padding-left:8px;display:flex;position:relative}.wSkVaW_tab{color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;padding:0 0 11px;font-size:13px;font-weight:500;line-height:16px;position:relative}.wSkVaW_tab:after{content:\"\";background:0 0;border-radius:2px;height:2px;position:absolute;bottom:1px;left:0;right:0}.wSkVaW_tabActive{color:var(--dsw-alias-state-business-primary)}.wSkVaW_tabActive:after{background:var(--dsw-alias-state-business-primary)}.wSkVaW_viewArea{flex-direction:column;flex:1;min-height:0;display:flex}.wSkVaW_composerStack{--dsh-composer-stack-gap:6px;gap:var(--dsh-composer-stack-gap);flex-direction:column;display:flex}.wSkVaW_composerSeat{--dsh-composer-text-max-height:336px;flex-direction:column;flex:none;display:flex}.wSkVaW_root[data-phase=active]{overflow:hidden}.wSkVaW_root[data-phase=active] .wSkVaW_header{flex:none}.wSkVaW_scrollBody{scrollbar-gutter:stable;flex-direction:column;flex:1;min-height:0;display:flex;overflow:hidden auto}.wSkVaW_root[data-phase=active] .wSkVaW_viewArea{flex:1 0 auto;min-height:auto}.wSkVaW_root[data-phase=active] .wSkVaW_composerSeat{z-index:7;background:linear-gradient(180deg, color-mix(in srgb, var(--dsw-alias-bg-base) 0%, transparent) 0px, var(--dsw-alias-bg-base) 36px);position:sticky;bottom:0}.wSkVaW_scrollBody:has([data-conversation-composer-overlay]){scrollbar-gutter:auto;position:relative;overflow:hidden auto}.wSkVaW_scrollBody:has([data-conversation-composer-overlay])>[data-slot=conversation\\.session]>.wSkVaW_viewArea{flex:1 1 0;min-height:0;overflow:hidden}.wSkVaW_scrollBody:has([data-conversation-composer-overlay])>.wSkVaW_composerSeat{right:var(--dsh-scrollbar-width);position:absolute;bottom:0;left:0}.wSkVaW_composerHero{width:min(calc(var(--dsh-composer-card-max-width) + 2 * var(--dsh-composer-side-clearance)), 100%);z-index:1;align-self:center;gap:8px;padding-bottom:32px;position:relative}.wSkVaW_heroGlow{z-index:-1;aspect-ratio:1051/468;pointer-events:none;width:135.438%;position:absolute;bottom:92px;left:50%;transform:translate(-50%,50%)}.wSkVaW_heroWorkspaceRow{align-items:center;gap:2px;min-width:0;margin-top:4px;padding-left:20px;display:flex}.wSkVaW_root[data-phase=hero] .wSkVaW_scrollBody{justify-content:center;overflow-y:auto}.wSkVaW_root[data-phase=settling] .wSkVaW_composerSeat{visibility:hidden}";
+		const css$6 = ".wSkVaW_root{background:var(--dsw-alias-bg-base);--dsh-chat-content-width:748px;--dsh-composer-card-max-width:calc(var(--dsh-chat-content-width) + 32px);--dsh-composer-side-clearance:16px;--dsh-composer-dock-inset:8px;flex-direction:column;min-width:0;height:100%;display:flex}.wSkVaW_header{border-bottom:1px solid #0000;flex:none;padding:12px 28px 0 20px;position:relative}.wSkVaW_header:after{content:\"\";z-index:0;background:var(--dsw-alias-border-l2);pointer-events:none;height:1px;position:absolute;bottom:1px;left:0;right:0}.wSkVaW_headerHidden{display:none}.wSkVaW_titleRow{align-items:center;gap:0;min-height:32px;display:flex}.wSkVaW_titleCluster{flex:1;align-items:center;gap:10px;min-width:0;display:flex}.wSkVaW_crumbs{white-space:nowrap;align-items:center;gap:4px;min-width:0;display:flex;overflow:hidden}.wSkVaW_crumbSeg{align-items:center;gap:4px;min-width:0;display:inline-flex}.wSkVaW_crumbSep{color:var(--dsw-alias-label-caption);font-size:14px;line-height:20px}.wSkVaW_crumb{max-width:220px;color:var(--dsw-alias-label-tertiary);text-overflow:ellipsis;white-space:nowrap;cursor:pointer;background:0 0;border:none;border-radius:12px;padding:4px 8px;font-size:14px;line-height:20px;overflow:hidden}.wSkVaW_crumbSubagent{font-size:12px;line-height:18px}.wSkVaW_crumb:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}.wSkVaW_crumbCurrent{color:var(--dsw-alias-label-primary);cursor:default;font-weight:500}.wSkVaW_headerActions{flex:none;align-items:center;gap:8px;display:flex}.wSkVaW_headerUtilities{flex:none;align-items:center;gap:8px;margin-left:20px;display:flex}.wSkVaW_headerUtilities:empty{display:none}.wSkVaW_tabs{z-index:1;gap:36px;margin-top:4px;padding-left:8px;display:flex;position:relative}.wSkVaW_tab{color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;padding:0 0 11px;font-size:13px;font-weight:500;line-height:16px;position:relative}.wSkVaW_tab:after{content:\"\";background:0 0;border-radius:2px;height:2px;position:absolute;bottom:1px;left:0;right:0}.wSkVaW_tabActive{color:var(--dsw-alias-state-business-primary)}.wSkVaW_tabActive:after{background:var(--dsw-alias-state-business-primary)}.wSkVaW_viewArea{flex-direction:column;flex:1;min-height:0;display:flex}.wSkVaW_composerStack{--dsh-composer-stack-gap:6px;gap:var(--dsh-composer-stack-gap);flex-direction:column;display:flex}.wSkVaW_composerSeat{--dsh-composer-text-max-height:336px;flex-direction:column;flex:none;display:flex}.wSkVaW_root[data-phase=active]{overflow:hidden}.wSkVaW_root[data-phase=active] .wSkVaW_header{flex:none}.wSkVaW_scrollBody{scrollbar-gutter:stable;flex-direction:column;flex:1;min-height:0;display:flex;overflow:hidden auto}.wSkVaW_root[data-phase=active] .wSkVaW_viewArea{flex:1 0 auto;min-height:auto}.wSkVaW_root[data-phase=active] .wSkVaW_composerSeat{z-index:7;background:linear-gradient(180deg, color-mix(in srgb, var(--dsw-alias-bg-base) 0%, transparent) 0px, var(--dsw-alias-bg-base) 36px);position:sticky;bottom:0}.wSkVaW_scrollBody:has([data-conversation-composer-overlay]){scrollbar-gutter:auto;position:relative;overflow:hidden auto}.wSkVaW_scrollBody:has([data-conversation-composer-overlay])>[data-slot=conversation\\.session]>.wSkVaW_viewArea{flex:1 1 0;min-height:0;overflow:hidden}.wSkVaW_scrollBody:has([data-conversation-composer-overlay])>.wSkVaW_composerSeat{right:var(--dsh-scrollbar-width);position:absolute;bottom:0;left:0}.wSkVaW_composerHero{width:min(calc(var(--dsh-composer-card-max-width) + 2 * var(--dsh-composer-side-clearance)), 100%);z-index:1;align-self:center;gap:8px;padding-bottom:32px;position:relative}.wSkVaW_heroGlow{z-index:-1;aspect-ratio:1051/468;pointer-events:none;width:135.438%;position:absolute;bottom:92px;left:50%;transform:translate(-50%,50%)}.wSkVaW_heroWorkspaceRow{align-items:center;gap:2px;min-width:0;margin-top:4px;padding-left:20px;display:flex}.wSkVaW_root[data-phase=hero] .wSkVaW_scrollBody{justify-content:center;overflow-y:auto}.wSkVaW_root[data-phase=settling] .wSkVaW_composerSeat{visibility:hidden}";
 		const tagId$6 = "@deepseek-ai/dsh-client-ui-conversation/ConversationRoot.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId$6) + "]") === null) {
 			const tag = document.createElement("style");
@@ -7034,6 +7132,7 @@ window.__ModuleLoader__.load({
 			"crumbCurrent": "wSkVaW_crumbCurrent",
 			"crumbSeg": "wSkVaW_crumbSeg",
 			"crumbSep": "wSkVaW_crumbSep",
+			"crumbSubagent": "wSkVaW_crumbSubagent",
 			"crumbs": "wSkVaW_crumbs",
 			"header": "wSkVaW_header",
 			"headerActions": "wSkVaW_headerActions",
@@ -7200,7 +7299,8 @@ window.__ModuleLoader__.load({
 				if (summary === void 0) break;
 				chain.unshift({
 					id: summary.id,
-					displayTitle: summary.displayTitle
+					displayTitle: summary.displayTitle,
+					subagent: summary.origin === "subagent"
 				});
 				if (summary.origin !== "subagent") break;
 				cursor = summary.parentId;
@@ -7237,20 +7337,29 @@ window.__ModuleLoader__.load({
 							"aria-label": t("session.hierarchy"),
 							children: [ancestry.map((summary, index) => {
 								const last = index === ancestry.length - 1;
+								const title = (0, react_jsx_runtime.jsx)("button", {
+									type: "button",
+									className: clsx(ConversationRoot_module_css_default.crumb, summary.subagent && ConversationRoot_module_css_default.crumbSubagent, last && ConversationRoot_module_css_default.crumbCurrent),
+									disabled: last,
+									onClick: () => {
+										open(summary.id);
+									},
+									children: summary.displayTitle
+								});
+								const lineage = last || summary.subagent;
+								const lineageOwner = {
+									lineageSessionId: summary.id,
+									displayTitle: summary.displayTitle,
+									...last ? {} : { openTitle: () => {
+										open(summary.id);
+									} }
+								};
 								return (0, react_jsx_runtime.jsxs)("span", {
 									className: ConversationRoot_module_css_default.crumbSeg,
 									children: [index > 0 && (0, react_jsx_runtime.jsx)("span", {
 										className: ConversationRoot_module_css_default.crumbSep,
 										children: "/"
-									}), (0, react_jsx_runtime.jsx)("button", {
-										type: "button",
-										className: clsx(ConversationRoot_module_css_default.crumb, last && ConversationRoot_module_css_default.crumbCurrent),
-										disabled: last,
-										onClick: () => {
-											open(summary.id);
-										},
-										children: summary.displayTitle
-									})]
+									}), lineage ? summary.subagent ? renderSlot("conversation.session.header.lineage", lineageOwner, { fallback: title }) : (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [title, renderSlot("conversation.session.header.lineage", lineageOwner, { fallback: null })] }) : title]
 								}, summary.id);
 							}), ancestry.length === 0 && (0, react_jsx_runtime.jsx)("span", {
 								className: ConversationRoot_module_css_default.crumbCurrent,
@@ -8888,9 +8997,6 @@ window.__ModuleLoader__.load({
 			if (location?.kind !== "turn" && location?.kind !== "step") return 0;
 			return location.turn.steps.at(-1)?.step ?? 0;
 		}
-		function retryTurn(event) {
-			return event.type === "llm/retry" || event.type === "llm/retry-started" ? event.data.turn : void 0;
-		}
 		function failureFrom(match) {
 			if (match.event.type !== "turn/end" || match.event.data.reason.kind !== "error") return void 0;
 			const failure = match.event.data.reason.error;
@@ -8906,14 +9012,16 @@ window.__ModuleLoader__.load({
 			if (end?.event.type !== "turn/end") return void 0;
 			const failure = failureFrom(end);
 			if (failure === void 0) return void 0;
-			const turn = end.event.data.turn;
 			return {
-				turn,
-				hidden: context.matches.some((match) => retryTurn(match.event) === turn),
+				turn: end.event.data.turn,
 				failure
 			};
 		}
-		/** Terminal turn failure Definition, suppressed when the turn owns a retry chain. */
+		/**
+		* Terminal turn failure Definition. Retries run inside the failing turn, so the
+		* turn's `llm/retry` history never suppresses this terminal row; the model-retry
+		* node renders that history separately.
+		*/
 		const turnErrorDefinition = {
 			kind: "turn-error",
 			target: "chat",
@@ -8926,29 +9034,18 @@ window.__ModuleLoader__.load({
 					id: String(event.data.turn),
 					role: "update"
 				};
-				const turn = retryTurn(event);
-				return turn === void 0 ? null : {
-					id: String(turn),
-					role: "update"
-				};
+				return null;
 			},
 			start: (_context, match) => {
 				if (match.event.type !== "turn/start") throw new Error("turn-error start requires turn/start");
-				return {
-					turn: match.event.data.turn,
-					hidden: false
-				};
+				return { turn: match.event.data.turn };
 			},
 			update: (context, match) => {
 				const failure = failureFrom(match);
-				if (failure !== void 0) return {
+				return failure === void 0 ? context.state : {
 					...context.state,
 					failure
 				};
-				return retryTurn(match.event) === context.state.turn ? {
-					...context.state,
-					hidden: true
-				} : context.state;
 			},
 			buildViewNode: (context) => {
 				const state = context.state ?? fallbackState(context);
@@ -8963,9 +9060,7 @@ window.__ModuleLoader__.load({
 					message: failure.message,
 					...failure.code === void 0 ? {} : { code: failure.code }
 				};
-				if (!state.hidden) return chatNode(context, "turn-error", node.seq, node);
-				const current = context.current.get("chat");
-				return current === void 0 || current === null ? null : chatNode(context, "turn-error", node.seq, node, { visibility: "hidden" });
+				return chatNode(context, "turn-error", node.seq, node);
 			}
 		};
 		/**
@@ -9345,7 +9440,7 @@ window.__ModuleLoader__.load({
 		}
 		//#endregion
 		//#region \0dsh-css:/home/runner/work/deepseek-harness/deepseek-harness/packages/client/ui-conversation/src/client/chat/AssistantMarkdown.module.css.mjs
-		const css$2 = ".Sxvs8a_root{color:var(--dsw-alias-label-primary);flex-direction:column;font-size:16px;line-height:28px;display:flex}.Sxvs8a_body{flex-direction:column;gap:16px;display:flex}.Sxvs8a_stopped{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-tertiary);border-radius:6px;align-self:flex-start;padding:0 6px;font-size:11px;line-height:18px}.Sxvs8a_actions{margin-top:16px;margin-left:-6px}";
+		const css$2 = ".Sxvs8a_root{color:var(--dsw-alias-label-primary);flex-direction:column;font-size:16px;line-height:28px;display:flex}.Sxvs8a_body{flex-direction:column;gap:16px;display:flex}.Sxvs8a_body .md-table-wide{--dsh-table-spare:max(0px, calc((100cqw - var(--dsh-chat-content-width)) / 2));--dsh-table-lead:calc(var(--dsh-table-spare) + min(var(--dsh-chat-content-width), 100cqw) - 100%);box-sizing:border-box;width:calc(100% + var(--dsh-table-lead) + var(--dsh-table-spare));max-width:none;margin-left:calc(-1 * var(--dsh-table-lead));padding-left:var(--dsh-table-lead)}.Sxvs8a_stopped{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-tertiary);border-radius:6px;align-self:flex-start;padding:0 6px;font-size:11px;line-height:18px}.Sxvs8a_actions{margin-top:16px;margin-left:-6px}";
 		const tagId$2 = "@deepseek-ai/dsh-client-ui-conversation/AssistantMarkdown.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId$2) + "]") === null) {
 			const tag = document.createElement("style");
@@ -9951,6 +10046,10 @@ window.__ModuleLoader__.load({
 				name: "conversation.session.header",
 				locale: NS,
 				children: {
+					"conversation.session.header.lineage": {
+						kind: "single",
+						scope: "session"
+					},
 					"conversation.session.header.actions": {
 						kind: "list",
 						scope: "session"

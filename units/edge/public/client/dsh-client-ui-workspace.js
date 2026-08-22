@@ -1657,6 +1657,32 @@ window.__ModuleLoader__.load({
 			const groupExpansion = useStore((s) => s.groupExpansion);
 			const sessionOrderByAccount = useStore((s) => s.sessionOrderByAccount);
 			const sessionUpdatedAtByAccount = useStore((s) => s.sessionUpdatedAtByAccount);
+			const currentBlankSessionId = useSessions((state) => {
+				const current = state.current;
+				return current !== void 0 && state.byId[current]?.blank === true ? current : void 0;
+			});
+			const currentBlankAccount = currentBlankSessionId === void 0 ? void 0 : workspaces.find((workspace) => workspace.sessionIds.includes(currentBlankSessionId))?.workspaceId ?? "";
+			const promotedBlank = (0, react.useRef)(void 0);
+			(0, react.useEffect)(() => {
+				if (currentBlankSessionId === void 0 || currentBlankAccount === void 0) {
+					promotedBlank.current = void 0;
+					return;
+				}
+				if (promotedBlank.current?.sessionId === currentBlankSessionId && promotedBlank.current.accountKey === currentBlankAccount) return;
+				promotedBlank.current = {
+					sessionId: currentBlankSessionId,
+					accountKey: currentBlankAccount
+				};
+				for (const accountKey of new Set([currentBlankAccount, FLAT_SESSION_ORDER_KEY])) {
+					const previous = sessionOrderByAccount[accountKey] ?? [];
+					actions.setSessionOrder(accountKey, [currentBlankSessionId, ...previous.filter((id) => id !== currentBlankSessionId)]);
+				}
+			}, [
+				actions.setSessionOrder,
+				currentBlankAccount,
+				currentBlankSessionId,
+				sessionOrderByAccount
+			]);
 			(0, react.useEffect)(() => {
 				if (workspacePhase !== "ready") return;
 				actions.retainAccountKeys([
