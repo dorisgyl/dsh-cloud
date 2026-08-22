@@ -79,7 +79,64 @@ const checks = []
   })
 }
 
-let failures = 0
+// ------------------------------------------------------- abstract completeness
+//
+// The other half of the same failure. A seam's base class declares methods it
+// does not implement, and a provider that misses one registers fine, boots
+// fine, and throws "x is not a function" the first time something calls it --
+// which may be a release later than the version that added it.
+//
+// Upstream 0.1.1 added five methods to CredentialProvider in one go, and this
+// found that the provider had also been missing `unset` since it was written.
+// Neither was visible to anything until now.
+const seams = [
+  ['@deepseek-ai/dsh-credentials', 'CredentialProvider', '../packages/cf-credentials-do/src/index.mjs', 'CfCredentialsDo'],
+  ['@deepseek-ai/dsh-attachment', 'AttachmentStore', '../packages/cf-attachments-do/src/index.mjs', 'CfAttachmentsDo'],
+  ['@deepseek-ai/dsh-settings', 'SettingsProvider', '../packages/cf-settings-do/src/index.mjs', 'CfSettingsDo'],
+  ['@deepseek-ai/dsh-session-query', 'SessionQueryEngine', '../packages/cf-session-query-do/src/index.mjs', 'CfSessionQueryDo'],
+  ['@deepseek-ai/dsh-session-persistence', 'SessionPersistence', '../packages/cf-session-persistence-do/src/index.mjs', 'CfSessionPersistenceDo'],
+]
+
+console.log('\nabstract methods declared by upstream, implemented here')
+let abstractGaps = 0
+for (const [pkg, baseName, relative, exported] of seams) {
+  let declared
+  try {
+    const source = upstreamSource(pkg, 'lib/types/index.d.ts')
+    const at = source.indexOf(`abstract class ${baseName}`)
+    if (at === -1) { console.log(`  skip     ${baseName}: not found in ${pkg}`); continue }
+    const body = source.slice(at, source.indexOf('\n}', at))
+    // Methods only. An `abstract readonly` member is a property the constructor
+    // assigns, so it is never on the prototype and the shape checks below are
+    // what cover it -- imageLimits is exactly that, and reporting it here would
+    // train the reader to ignore this section.
+    declared = [...body.matchAll(/^\s+abstract\s+(\w+)\s*\(/gm)].map((m) => m[1])
+  } catch { console.log(`  skip     ${pkg}: not installed`); continue }
+
+  let implemented
+  try {
+    const namespace = await import(new URL(relative, import.meta.url).href)
+    const concrete = exported ? namespace[exported] : namespace.default ?? Object.values(namespace).find((v) => typeof v === 'function')
+    if (typeof concrete !== 'function') { console.log(`  skip     ${baseName}: no class exported from ${relative}`); continue }
+    // Own prototype only: inheriting the abstract declaration is exactly the
+    // gap being looked for, and a readonly member set in the constructor is
+    // covered by the shape checks above.
+    implemented = new Set(Object.getOwnPropertyNames(concrete.prototype))
+  } catch (error) { console.log(`  skip     ${baseName}: ${String(error?.message ?? error).slice(0, 60)}`); continue }
+
+  const missing = declared.filter((name) => !implemented.has(name))
+  const fields = missing.filter((name) => /^[a-z]+([A-Z]|$)/.test(name) && !implemented.has(name))
+  if (missing.length === 0) console.log(`  ok       ${baseName}: all ${declared.length} implemented`)
+  else {
+    // A missing name may be a constructor-assigned property rather than a
+    // method (imageLimits is), so report and let the reader judge — except
+    // that anything shaped like a call is a real gap.
+    console.log(`  CHECK    ${baseName}: not on the prototype -- ${fields.join(', ')}`)
+    abstractGaps += missing.length
+  }
+}
+
+let failures = abstractGaps
 for (const check of checks) {
   console.log(`\n${check.what}`)
   for (const field of check.required) {
