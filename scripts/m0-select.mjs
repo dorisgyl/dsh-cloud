@@ -43,6 +43,18 @@ const EXCLUDE = [
   // with zero Node builtins, and dsh-jobs is an abstract seam that refuses to
   // start without an implementation. "local" here means in-process, not on-disk.
   [/^dsh-agent-presets$/, 'needs the `loader` service (cordis-plugin-loader), which a statically expanded tree does not use. Nothing injects what it provides'],
+  // New at 0.1.1: the authorization-grant subsystem, built on the record half
+  // that the credential seam grew in the same release. cf-credentials-do
+  // implements that half -- a grant is a row like any other -- so this is a
+  // decision rather than a limit.
+  //
+  // It stays out because nothing here starts an authorization. Every provider
+  // this deployment offers takes an API key: Workers AI takes none at all, and
+  // the keyed ones read a reference. The one upstream consumer of grants is
+  // llm-pi-ai, which is excluded for its own reasons (child_process through the
+  // MCP SDK). Installing a subsystem whose only entry point is absent adds a
+  // configuration surface that can never be used.
+  [/^dsh-authorization$/, '0.1.1 authorization grants; no provider here starts one, and its only upstream consumer (llm-pi-ai) is excluded'],
   // The reason here used to be "needs sessionQuery, which is out of scope",
   // and sessionQuery has since been filled by cf-session-query-do. What keeps
   // this out now is the other half of the old line: nothing in this deployment
