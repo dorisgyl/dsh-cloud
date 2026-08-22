@@ -67,7 +67,7 @@ const requireShim = {
         // return something wrong.
         export function createRequire() {
           return function req(id) {
-            if (typeof id === 'string' && id.endsWith('package.json')) return { version: '0.1.0-rc.8' }
+            if (typeof id === 'string' && id.endsWith('package.json')) return { version: '0.1.1-rc.2' }
             throw new Error('createRequire shim: unsupported require(' + id + ') in workerd')
           }
         }

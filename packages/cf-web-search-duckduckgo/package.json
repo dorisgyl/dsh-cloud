@@ -5,5 +5,5 @@
   "type": "module",
   "description": "A keyless ctx.web search provider over DuckDuckGo's HTML endpoint.",
   "exports": { ".": "./src/index.mjs" },
-  "dependencies": { "@deepseek-ai/dsh-web": "0.1.0-rc.8" }
+  "dependencies": { "@deepseek-ai/dsh-web": "0.1.1-rc.2" }
 }
